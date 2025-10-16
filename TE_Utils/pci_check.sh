@@ -99,7 +99,11 @@ speed_check()
     speed=$(lspci -vv -s $port | grep "LnkSta:" | awk '{ print $3 }' | sed 's/,$//')
     echo -e "${BLUE}Port: $port is running at ${speed} ${NOCOLOR}"
 
+<<<<<<< HEAD
     if [[ $PN == 'G520' || $PN == 'G525' ]]; then 
+=======
+    if [[ $PN == 'G520' ]]; then 
+>>>>>>> main
         if [[ $speed == "unknown" ]]; then
             echo -e "${GREEN}Success: Port $port has sufficient speed (${speed} GT/s)${NOCOLOR}"
             echo -e "${GREEN}PCIe lane check pass${NOCOLOR}"
