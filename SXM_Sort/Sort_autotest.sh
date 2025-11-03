@@ -8,11 +8,13 @@
 ##
 ## Version History
 ##-------------------------------
-## Version       : 1.0.1
+## Version       : 1.0.3
 ## Release date  : 2024-05-09
 ## Revised by    : Winter Liu
 ## Description   : Initial release
 ## add PG520 IST files download 2024-06-04
+## add run_mode for debug 2024-08-08
+## add exist diag and sort_diag no need download 2024-08-16
 ##**********************************************************************************
 
 [ -d "/home/diags/nv/logs/" ] || mkdir /home/diags/nv/logs
@@ -38,12 +40,12 @@ export NC_diagserver_IP="192.168.102.21"
 export NC_API_IP="192.168.102.20"
 export TJ_API_IP="10.67.240.66"
 export OPID="$Diag_Path/OPID/OPID.ini"  ###add check operator ID 4/4/2024####
-export Script_File="$Diag_Path/Sort_autotest.sh"
+export Script_File="Sort_autotest.sh"
 export ISTdata="/home/diags/ISTdata" ###IST folder###2024-06-04
 export IST_file="FXSJ_Zipped_DFX_GH100_IST_MUPT_RMA_Images_h100.7.tar.gz" ###IST file name###2024-06-04
 export MODS_VER="525.213.tar.gz"
 
-Script_VER="1.0.1"  ###script version 2024-06-04
+Script_VER="1.0.3"  ###script version 2024-08-16
 CFG_VERSION="1.0"
 PROJECT="SORT_TESLA"
 Process_Result=""
@@ -72,6 +74,7 @@ Fail_Module=""
 Final_status=""
 sort_diagname=""
 sort_diagver=""
+Run_Mode=0
 
 ######test station list######
 list_st="TEST" ###no need spare parts station list###
@@ -447,8 +450,8 @@ Output_Scan_Infor()
 	scan_label
 	sed -i 's/operator_id=.*$/operator_id='${operator_id}'/g' $SCANFILE
 	sed -i 's/fixture_id=.*$/fixture_id='${fixture_id}'/g' $SCANFILE
-	sed -i 's/serial_number=.*$/serial_number='${Scan_Upper_SN}'/g' $SCANFILE
-	sed -i 's/serial_number2=.*$/serial_number2='${Scan_Lower_SN}'/g' $SCANFILE
+	#sed -i 's/serial_number=.*$/serial_number='${Scan_Upper_SN}'/g' $SCANFILE
+	#sed -i 's/serial_number2=.*$/serial_number2='${Scan_Lower_SN}'/g' $SCANFILE
 	show_pass_msg "SCAN info OK"
 
 }
@@ -724,90 +727,90 @@ fi
 
 ####Prepare IST files#####2024-06-04
 
-if [ $MACHINE = SG520 ];then
-	#DFX=$(get_config "Diag3")
-	if [ -f $ISTdata/$IST_file ];then
-		show_pass_message "IST_file already exist!!!"		
-	else
-		#echo "${Diag_Path}/HEAVEN/$HEAVEN_VER"
-		#pause
-		if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
-			show_pass_message "DownLoad IST_file From Server Please Waiting ..."
-			cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
-			cd $ISTdata
-			tar -xf $IST_file 
-			if [ $? -ne 0 ];then
-				show_fail_message "Please make sure exist IST file zip files"
-				show_fail_msg "DownLoad IST file FAIL"
-				exit 1
-			else
-				show_pass_msg "DownLoad Diag pass"
-			fi		
-		else
-			Input_Server_Connection
-			if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
-				show_pass_message "DownLoad DFX From Server Please Waiting ..."
-				cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
-				cd $ISTdata
-				tar -xf $IST_file
-				if [ $? -ne 0 ];then
-					show_fail_message "Please make sure exist IST file zip files"
-					show_fail_msg "DownLoad IST file FAIL"
-					exit 1
-				else
-					show_pass_msg "DownLoad Diag pass"
-				fi		
-			else
-				show_fail_message "IST file isn't exist Please Call TE"
-				show_fail_msg "DownLoad IST file FAIL"
-				exit 1 
-			fi
-		fi
-	fi
-fi
-###Prepare MODS file###2024-06-04
+# if [ $MACHINE = SG520 ];then
+	# #DFX=$(get_config "Diag3")
+	# if [ -f $ISTdata/$IST_file ];then
+		# show_pass_message "IST_file already exist!!!"		
+	# else
+		# #echo "${Diag_Path}/HEAVEN/$HEAVEN_VER"
+		# #pause
+		# if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
+			# show_pass_message "DownLoad IST_file From Server Please Waiting ..."
+			# cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
+			# cd $ISTdata
+			# tar -xf $IST_file 
+			# if [ $? -ne 0 ];then
+				# show_fail_message "Please make sure exist IST file zip files"
+				# show_fail_msg "DownLoad IST file FAIL"
+				# exit 1
+			# else
+				# show_pass_msg "DownLoad Diag pass"
+			# fi		
+		# else
+			# Input_Server_Connection
+			# if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
+				# show_pass_message "DownLoad DFX From Server Please Waiting ..."
+				# cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
+				# cd $ISTdata
+				# tar -xf $IST_file
+				# if [ $? -ne 0 ];then
+					# show_fail_message "Please make sure exist IST file zip files"
+					# show_fail_msg "DownLoad IST file FAIL"
+					# exit 1
+				# else
+					# show_pass_msg "DownLoad Diag pass"
+				# fi		
+			# else
+				# show_fail_message "IST file isn't exist Please Call TE"
+				# show_fail_msg "DownLoad IST file FAIL"
+				# exit 1 
+			# fi
+		# fi
+	# fi
+# fi
+# ###Prepare MODS file###2024-06-04
 
-if [ $MACHINE = SG520 ];then
-	#DFX=$(get_config "Diag3")
-	if [ -f $ISTdata/$IST_file ];then
-		show_pass_message "IST_file already exist!!!"		
-	else
-		#echo "${Diag_Path}/HEAVEN/$HEAVEN_VER"
-		#pause
-		if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
-			show_pass_message "DownLoad IST_file From Server Please Waiting ..."
-			cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
-			cd $ISTdata
-			tar -xf $IST_file 
-			if [ $? -ne 0 ];then
-				show_fail_message "Please make sure exist IST file zip files"
-				show_fail_msg "DownLoad IST file FAIL"
-				exit 1
-			else
-				show_pass_msg "DownLoad Diag pass"
-			fi		
-		else
-			Input_Server_Connection
-			if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
-				show_pass_message "DownLoad DFX From Server Please Waiting ..."
-				cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
-				cd $ISTdata
-				tar -xf $IST_file
-				if [ $? -ne 0 ];then
-					show_fail_message "Please make sure exist IST file zip files"
-					show_fail_msg "DownLoad IST file FAIL"
-					exit 1
-				else
-					show_pass_msg "DownLoad Diag pass"
-				fi		
-			else
-				show_fail_message "IST file isn't exist Please Call TE"
-				show_fail_msg "DownLoad IST file FAIL"
-				exit 1 
-			fi
-		fi
-	fi
-fi		
+# if [ $MACHINE = SG520 ];then
+	# #DFX=$(get_config "Diag3")
+	# if [ -f $ISTdata/$IST_file ];then
+		# show_pass_message "IST_file already exist!!!"		
+	# else
+		# #echo "${Diag_Path}/HEAVEN/$HEAVEN_VER"
+		# #pause
+		# if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
+			# show_pass_message "DownLoad IST_file From Server Please Waiting ..."
+			# cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
+			# cd $ISTdata
+			# tar -xf $IST_file 
+			# if [ $? -ne 0 ];then
+				# show_fail_message "Please make sure exist IST file zip files"
+				# show_fail_msg "DownLoad IST file FAIL"
+				# exit 1
+			# else
+				# show_pass_msg "DownLoad Diag pass"
+			# fi		
+		# else
+			# Input_Server_Connection
+			# if [ -f ${Diag_Path}/HEAVEN/$IST_file ]; then
+				# show_pass_message "DownLoad DFX From Server Please Waiting ..."
+				# cp -rf ${Diag_Path}/HEAVEN/$IST_file $ISTdata
+				# cd $ISTdata
+				# tar -xf $IST_file
+				# if [ $? -ne 0 ];then
+					# show_fail_message "Please make sure exist IST file zip files"
+					# show_fail_msg "DownLoad IST file FAIL"
+					# exit 1
+				# else
+					# show_pass_msg "DownLoad Diag pass"
+				# fi		
+			# else
+				# show_fail_message "IST file isn't exist Please Call TE"
+				# show_fail_msg "DownLoad IST file FAIL"
+				# exit 1 
+			# fi
+		# fi
+	# fi
+# fi		
 
 ####Prepare BIOS####
 #if [ -f ${Diag_Path}/${MACHINE}/BIOS/${BIOS_NAME} ]; then
@@ -829,126 +832,304 @@ fi
 #####run diag#####
 Run_Diag()
 {
-cd $mods
-if [ $testqty = "2" ];then	
-	upload_start_log  ${Scan_Upper_SN}
-	upload_start_log  ${Scan_Lower_SN}
-else
-	upload_start_log  ${Output_Upper_SN}
-fi	
-if [ ${current_stc_name} = "FT" ];then
-	test_item="inforcheck bioscheck BAT BIT FCT FPF"
-	run_command "$test_item"
-	if [ $? -eq 0 ];then
-		if [ $testqty = "2" ];then
-			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FPF*" 2>/dev/null)
-			resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FPF*" 2>/dev/null)		
-			if [ -n "$resf" ] && [ -n "$resc" ];then
-				Upload_Log ${Scan_Upper_SN} PASS
-				Upload_Log ${Scan_Lower_SN} PASS
-				show_pass
-				sleep 20
-				reboot
-			elif [ -n "$resf" ] ; then
-				Upload_Log ${Scan_Upper_SN} PASS
-				show_pass
-				sleep 20
-				reboot
-			else
-				Upload_Log ${Scan_Lower_SN} PASS
-				show_pass
-				sleep 20
-				reboot
-			fi			
-		else
-			Upload_Log ${Scan_Upper_SN} PASS
-			show_pass
-			sleep 20
-			reboot
-		fi	
+if [ $Run_Mode = "0" ];then
+	cd $mods
+	if [ $testqty = "2" ];then	
+		upload_start_log  ${Scan_Upper_SN}
+		upload_start_log  ${Scan_Lower_SN}
 	else
-		if [ $testqty = "2" ];then
-			Upload_Log ${Scan_Upper_SN} FAIL
-			Upload_Log ${Scan_Lower_SN} FAIL
-			show_fail
-		else
-			Upload_Log ${Scan_Upper_SN} FAIL
-			show_fail
-		fi	
-	fi
-elif [ ${current_stc_name} = "FLA" ];then
-	test_item="rwcsv FLA bioscheck"
-	run_command "$test_item"
-	if [ $? -eq 0 ];then
-		Upload_Log ${Scan_Upper_SN} PASS
-		show_pass	
-	else
-		Upload_Log ${Scan_Upper_SN} FAIL
-		show_fail			
-	fi
-elif [ ${current_stc_name} = "FLB" ];then
-	test_item="rwcsv FLB"
-	run_command "$test_item"
-	if [ $? -eq 0 ];then
-		Upload_Log ${Scan_Upper_SN} PASS
-		show_pass			
-	else
-		Upload_Log ${Scan_Upper_SN} FAIL
-		show_fail	
+		upload_start_log  ${Output_Upper_SN}
 	fi	
-else
-	test_item="${current_stc_name}"
-	run_command "$test_item"
-	if [ $? -eq 0 ];then
-		if [ $testqty = "2" ];then
-			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
-			resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
-			if [ -n "$resf" ] && [ -n "$resc" ];then
-				Upload_Log ${Scan_Upper_SN} PASS
-				Upload_Log ${Scan_Lower_SN} PASS
-				show_pass
-				sleep 20
-				reboot
-			elif [ -n "$resf" ] ; then
-				Upload_Log ${Scan_Upper_SN} PASS
-				show_pass
-				sleep 20
-				reboot
+	if [ ${current_stc_name} = "FT" ];then
+		test_item="inforcheck bioscheck BAT BIT FCT FPF"
+		run_command "$test_item"
+		if [ $? -eq 0 ];then
+			if [ $testqty = "2" ];then
+				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FPF*" 2>/dev/null)
+				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FPF*" 2>/dev/null)		
+				if [ -n "$resf" ] && [ -n "$resc" ];then
+					Upload_Log ${Scan_Upper_SN} PASS
+					Upload_Log ${Scan_Lower_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				elif [ -n "$resf" ] ; then
+					Upload_Log ${Scan_Upper_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				else
+					Upload_Log ${Scan_Lower_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				fi			
 			else
-				Upload_Log ${Scan_Lower_SN} PASS
+				Upload_Log ${Scan_Upper_SN} PASS
 				show_pass
 				sleep 20
 				reboot
 			fi	
 		else
-			Upload_Log ${Output_Upper_SN} PASS
-			#show_pass
-			#sleep 20
-			#reboot
-		fi	
-	else
-		if [ $testqty = "2" ];then
-			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
-			resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
-			if [ -n "$resf" ];then
-				Upload_Log ${Scan_Upper_SN} PASS
-				Upload_Log ${Scan_Lower_SN} FAIL
-				show_fail
-			elif [ -n "$resc" ];then	
-				Upload_Log ${Scan_Lower_SN} PASS
+			if [ $testqty = "2" ];then
 				Upload_Log ${Scan_Upper_SN} FAIL
+				Upload_Log ${Scan_Lower_SN} FAIL
 				show_fail
 			else
 				Upload_Log ${Scan_Upper_SN} FAIL
-				Upload_Log ${Scan_Lower_SN} FAIL
 				show_fail
-			fi		
+			fi	
+		fi
+	elif [ ${current_stc_name} = "FLA" ];then
+		test_item="rwcsv FLA bioscheck"
+		run_command "$test_item"
+		if [ $? -eq 0 ];then
+			Upload_Log ${Scan_Upper_SN} PASS
+			show_pass	
 		else
-			Upload_Log ${Output_Upper_SN} FAIL
-			#show_fail
+			Upload_Log ${Scan_Upper_SN} FAIL
+			show_fail			
+		fi
+	elif [ ${current_stc_name} = "FLB" ];then
+		test_item="rwcsv FLB"
+		run_command "$test_item"
+		if [ $? -eq 0 ];then
+			Upload_Log ${Scan_Upper_SN} PASS
+			show_pass			
+		else
+			Upload_Log ${Scan_Upper_SN} FAIL
+			show_fail	
+		fi	
+	else
+		test_item="${current_stc_name}"
+		run_command "$test_item"
+		if [ $? -eq 0 ];then
+			if [ $testqty = "2" ];then
+				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
+				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
+				if [ -n "$resf" ] && [ -n "$resc" ];then
+					Upload_Log ${Scan_Upper_SN} PASS
+					Upload_Log ${Scan_Lower_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				elif [ -n "$resf" ] ; then
+					Upload_Log ${Scan_Upper_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				else
+					Upload_Log ${Scan_Lower_SN} PASS
+					show_pass
+					sleep 20
+					reboot
+				fi	
+			else
+				Upload_Log ${Output_Upper_SN} PASS
+				#show_pass
+				#sleep 20
+				#reboot
+			fi	
+		else
+			if [ $testqty = "2" ];then
+				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
+				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
+				if [ -n "$resf" ];then
+					Upload_Log ${Scan_Upper_SN} PASS
+					Upload_Log ${Scan_Lower_SN} FAIL
+					show_fail
+				elif [ -n "$resc" ];then	
+					Upload_Log ${Scan_Lower_SN} PASS
+					Upload_Log ${Scan_Upper_SN} FAIL
+					show_fail
+				else
+					Upload_Log ${Scan_Upper_SN} FAIL
+					Upload_Log ${Scan_Lower_SN} FAIL
+					show_fail
+				fi		
+			else
+				Upload_Log ${Output_Upper_SN} FAIL
+				#show_fail
+			fi	
 		fi	
 	fi	
+else
+	cd $mods
+	# if [ $testqty = "2" ];then	
+		# upload_start_log  ${Scan_Upper_SN}
+		# upload_start_log  ${Scan_Lower_SN}
+	# else
+		# upload_start_log  ${Scan_Upper_SN}
+	# fi	
+	if [ ${station} = "FT" ];then
+		test_item="BAT BIT FCT FPF"
+		run_command "$test_item"
+		# if [ $? -eq 0 ];then
+			# if [ $testqty = "2" ];then
+				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FPF*" 2>/dev/null)
+				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FPF*" 2>/dev/null)		
+				# if [ -n "$resf" ] && [ -n "$resc" ];then
+					# # Upload_Log ${Scan_Upper_SN} PASS
+					# # Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# elif [ -n "$resf" ] ; then
+					# # Upload_Log ${Scan_Upper_SN} PASS
+					# # show_pass
+					# #sleep 20
+					# #reboot
+				# else
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# fi			
+			# else
+				# Upload_Log ${Scan_Upper_SN} PASS
+				# show_pass
+				# #sleep 20
+				# #reboot
+			# fi	
+		# else
+			# if [ $testqty = "2" ];then
+				# Upload_Log ${Scan_Upper_SN} FAIL
+				# Upload_Log ${Scan_Lower_SN} FAIL
+				# show_fail
+			# else
+				# Upload_Log ${Scan_Upper_SN} FAIL
+				# show_fail
+			# fi	
+		# fi
+	elif [ ${station} = "FLA" ];then
+		test_item="rwcsv FLA"
+		run_command "$test_item"
+		# if [ $? -eq 0 ];then
+			# Upload_Log ${Scan_Upper_SN} PASS
+			# show_pass
+			# show_pass_message "FLA station need poweroff and turn off/on 54v PSU as well"	
+		# else
+			# Upload_Log ${Scan_Upper_SN} FAIL
+			# show_fail			
+		# fi
+	elif [ ${station} = "FLB" ];then
+		test_item="rwcsv FLB"
+		run_command "$test_item"
+		# if [ $? -eq 0 ];then
+			# Upload_Log ${Scan_Upper_SN} PASS
+			# show_pass
+			# show_pass_message "FLB station need poweroff and turn off/on 54v PSU as well"	
+		# else
+			# Upload_Log ${Scan_Upper_SN} FAIL
+			# show_fail	
+		# fi
+	elif [ ${station} = "CHIFLASH" ];then ####for clear BBX station### 2024-04-26
+		test_item="rwcsv CHIFLASH"
+		run_command "$test_item"
+		# if [ $? -eq 0 ];then
+			# if [ $testqty = "2" ];then
+				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
+				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FLA*" 2>/dev/null)
+				# if [ -n "$resf" ] && [ -n "$resc" ];then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# elif [ -n "$resf" ] ; then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# else
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# fi	
+			# else
+				# Upload_Log ${Scan_Upper_SN} PASS
+				# show_pass
+				# #sleep 20
+				# #reboot
+			# fi	
+		# else
+			# if [ $testqty = "2" ];then
+				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
+				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FLA*" 2>/dev/null)
+				# if [ -n "$resf" ];then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# Upload_Log ${Scan_Lower_SN} FAIL
+					# show_fail
+				# elif [ -n "$resc" ];then	
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# Upload_Log ${Scan_Upper_SN} FAIL
+					# show_fail
+				# else
+					# Upload_Log ${Scan_Upper_SN} FAIL
+					# Upload_Log ${Scan_Lower_SN} FAIL
+					# show_fail
+				# fi		
+			# else
+				# Upload_Log ${Scan_Upper_SN} FAIL
+				# show_fail
+			# fi	
+		# fi
+	else
+		test_item="${station}"
+		run_command "$test_item"
+		# if [ $? -eq 0 ];then
+			# if [ $testqty = "2" ];then
+				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
+				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
+				# if [ -n "$resf" ] && [ -n "$resc" ];then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# elif [ -n "$resf" ] ; then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# else
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# show_pass
+					# #sleep 20
+					# #reboot
+				# fi	
+			# else
+				# Upload_Log ${Scan_Upper_SN} PASS
+				# show_pass
+				# #sleep 20
+				# #reboot
+			# fi	
+		# else
+			# if [ $testqty = "2" ];then
+				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
+				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
+				# if [ -n "$resf" ];then
+					# Upload_Log ${Scan_Upper_SN} PASS
+					# Upload_Log ${Scan_Lower_SN} FAIL
+					# show_fail
+				# elif [ -n "$resc" ];then	
+					# Upload_Log ${Scan_Lower_SN} PASS
+					# Upload_Log ${Scan_Upper_SN} FAIL
+					# show_fail
+				# else
+					# Upload_Log ${Scan_Upper_SN} FAIL
+					# Upload_Log ${Scan_Lower_SN} FAIL
+					# show_fail
+				# fi		
+			# else
+				# Upload_Log ${Scan_Upper_SN} FAIL
+				# show_fail
+			# fi	
+		# fi	
+	fi
 fi	
+	
 #run_command ${current_stc_name}
 
 #./$mods/"${current_stc_name}".sh
@@ -1054,56 +1235,98 @@ Input_Script=$(get_config "SCRIPT_VER")
 
 analysis_sta()
 {
-cd $mods/cfg/
-cp  ${Output_Upper_SN}.RSP cfg.ini
-get_information
-script_check
-if [ $MACHINE = SG520 ];then
-	prepare_file $ISTdata $IST_file
-	prepare_file $ISTdata $MODS_VER
-fi	
-
-if [ $current_stc_name = "OQA" ]; then
-	diag_name=$(get_config "Diag2")
-	diag_VER=$diag_name.tar.gz
-	if [ -f $mods/$diag_VER ]; then
-		Run_Diag
-	else
-		DownLoad
-		Run_Diag			
-	fi
-
-elif [[ "$list_st" =~ "$current_stc_name" ]];then
-	diag_name=$(get_config "Diag1")
-	diag_VER=$diag_name.tar.gz
-	sort_diagname=$(get_config "Diag2")
-	sort_diagver=$sort_diagname.tar.gz
-	#echo $diag_VER
-	#pause
-	if [ -f $mods/$diag_VER ]; then
-		Run_Diag
-	else
-		DownLoad
-		Run_Diag
-	
-	fi
-elif [[ "$list_stn" =~ "$current_stc_name" ]]; then
-	show_fail_message "Current Station is $current_stc_name, need more spare parts Please check!!!"
-	pause
-	diag_name=$(get_config "$Diag1")
-	diag_VER=$diag_name.tar.gz
-	if [ -f $mods/$diag_VER ]; then
-		Run_Diag
-	else
-		DownLoad
-		Run_Diag
+if [ $Run_Mode = "0" ];then
+	cd $mods/cfg/
+	cp  ${Output_Upper_SN}.RSP cfg.ini
+	get_information
+	script_check
+	if [ $MACHINE = SG520 ];then
+		prepare_file $ISTdata $IST_file
+		prepare_file $ISTdata $MODS_VER
 	fi	
-else
-	show_fail_message "Current Station is $current_stc_name not test station"
-	exit 1 
-	
-fi
 
+	if [ $current_stc_name = "OQA" ]; then
+		diag_name=$(get_config "Diag2")
+		diag_VER=$diag_name.tar.gz
+		if [ -f $mods/$diag_VER ]; then
+			Run_Diag
+		else
+			DownLoad
+			Run_Diag			
+		fi
+
+	elif [[ "$list_st" =~ "$current_stc_name" ]];then
+		diag_name=$(get_config "Diag1")
+		diag_VER=$diag_name.tar.gz
+		sort_diagname=$(get_config "Diag2")
+		sort_diagver=$sort_diagname.tar.gz
+		#echo $diag_VER
+		#pause
+		if [ -f $mods/$diag_VER ] && [ -f $mods/$sort_diagver ]; then  ###add exist diag and sort_diag no need download 
+			Run_Diag
+		else
+			DownLoad
+			Run_Diag
+		
+		fi
+	elif [[ "$list_stn" =~ "$current_stc_name" ]]; then
+		show_fail_message "Current Station is $current_stc_name, need more spare parts Please check!!!"
+		pause
+		diag_name=$(get_config "$Diag1")
+		diag_VER=$diag_name.tar.gz
+		if [ -f $mods/$diag_VER ]; then
+			Run_Diag
+		else
+			DownLoad
+			Run_Diag
+		fi	
+	else
+		show_fail_message "Current Station is $current_stc_name not test station"
+		exit 1 
+		
+	fi
+else
+	cd $mods/cfg/
+	cp  ${Output_Upper_SN}.RSP cfg.ini
+	get_information
+	script_check
+	read -p "Please Input station :" station
+	#echo $station
+	#pause
+	if [[ "$list_st_all" =~ "$station" ]];then
+		if [ $station = "OQA" ];then
+			diag_name=$(get_config "Diag2")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
+				Run_Diag
+			else
+				Run_Diag
+			fi
+		elif [ $station = "CHIFLASH" ];then
+			diag_name=$(get_config "Diag3")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
+				Run_Diag
+			else
+				Run_Diag
+			fi
+		else
+			diag_name=$(get_config "Diag1")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
+				Run_Diag
+			else
+				Run_Diag
+			fi
+		fi
+	else
+		show_fail_message "station wrong please check!!!"
+		exit 1
+	fi	
+fi	
 }
 
 upload_start_log()
@@ -1151,14 +1374,14 @@ script_check()
 		echo "Script Version is ${Script_VER}"
 	else
 		echo "Script Version is ${Script_VER}"
-		if [ -f $Script_File ];then
-			cp -rf $Script_File /home/diags/nv
+		if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
+			cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /home/diags/nv/$Script_File
 			sleep 15
 			reboot
 		else
 			Input_Server_Connection
-			if [ -f $Script_File ];then
-				cp -rf $Script_File /home/diags/nv
+			if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
+				cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /home/diags/nv/$Script_File
 				sleep 15
 				reboot
 			else
@@ -1236,7 +1459,7 @@ fi
 ntpdate $NC_diagserver_IP
 hwclock -w
 export start_time=$(date '+%F %T')
-
+rmmod nvidia_drm nvidia_modeset nvidia
 Read_SN
 
 if [ -f $SCANFILE ]; then
@@ -1304,21 +1527,37 @@ fi
 #echo $testqty
 
 if [ $testqty = "2" ]; then
-	Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN}
-	Input_Upper_PN=$(grep "900PN" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
-	Input_Upper_Station=$(grep "current_stc_name" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
-	Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Lower_SN}
-	Input_Lower_PN=$(grep "900PN" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
-	Input_Lower_Station=$(grep "current_stc_name" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
+	if [ $Run_Mode = "0" ];then
+		Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN}
+		Input_Upper_PN=$(grep "900PN" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Upper_Station=$(grep "current_stc_name" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Lower_SN}
+		Input_Lower_PN=$(grep "900PN" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Lower_Station=$(grep "current_stc_name" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
 
-	if [ ${Input_Upper_PN} = ${Input_Lower_PN} ] && [ ${Input_Upper_Station} = ${Input_Lower_Station} ] && [[ ! "$single_list_stn" =~ "$Input_Upper_Station" ]]; then
-		analysis_sta
+		if [ ${Input_Upper_PN} = ${Input_Lower_PN} ] && [ ${Input_Upper_Station} = ${Input_Lower_Station} ] && [[ ! "$single_list_stn" =~ "$Input_Upper_Station" ]]; then
+			analysis_sta
+		else
+			show_fail_message "make sure the cards PN and station is right!!! "
+			show_fail_message "!!!! ${Input_Upper_PN}:${Input_Upper_Station}!!!!${Input_Lower_PN}:${Input_Lower_Station}!!!!"
+			exit 1
+		fi	
 	else
-		show_fail_message "make sure the cards PN and station is right!!! "
-		show_fail_message "!!!! ${Input_Upper_PN}:${Input_Upper_Station}!!!!${Input_Lower_PN}:${Input_Lower_Station}!!!!"
-		exit 1
-	fi	
-	
+		Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN}
+		Input_Upper_PN=$(grep "900PN" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Upper_Station=$(grep "current_stc_name" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Lower_SN}
+		Input_Lower_PN=$(grep "900PN" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
+		Input_Lower_Station=$(grep "current_stc_name" $mods/cfg/${Output_Lower_SN}.RSP | awk -F '=' '{ print $2 }'  )
+
+		if [ ${Input_Upper_PN} = ${Input_Lower_PN} ]; then
+			analysis_sta
+		else
+			show_fail_message "make sure the cards PN and station is right!!! "
+			show_fail_message "!!!! ${Input_Upper_PN}:${Input_Upper_Station}!!!!${Input_Lower_PN}:${Input_Lower_Station}!!!!"
+			exit 1
+		fi
+	fi		
 else
 	Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN}
 	analysis_sta
