@@ -8,13 +8,15 @@
 ##
 ## Version History
 ##-------------------------------
-## Version       : 1.0.4
-## Release date  : 2024-11-01
-## Revised by    : Thay Khang
+## Version       : 1.0.5
+## Release date  : 2024-05-09
+## Revised by    : Winter Liu
 ## Description   : Initial release
 ## add PG520 IST files download 2024-06-04
 ## add run_mode for debug 2024-08-08
 ## add exist diag and sort_diag no need download 2024-08-16
+## add PG520 looping or stuck issue reboot and run step2 2024-11-07
+## add check IST file md5sum 2024-11-07
 ##**********************************************************************************
 
 [ -d "/home/diags/nv/logs/" ] || mkdir /home/diags/nv/logs
@@ -40,12 +42,14 @@ export NC_diagserver_IP="192.168.102.21"
 export NC_API_IP="192.168.102.20"
 export TJ_API_IP="10.67.240.66"
 export OPID="$Diag_Path/OPID/OPID.ini"  ###add check operator ID 4/4/2024####
-export Script_File="$Diag_Path/Sort_autotest.sh"
+export Script_File="Sort_autotest.sh"
 export ISTdata="/home/diags/ISTdata" ###IST folder###2024-06-04
 export IST_file="FXSJ_Zipped_DFX_GH100_IST_MUPT_RMA_Images_h100.7.tar.gz" ###IST file name###2024-06-04
+export IST_folder="DFX_GH100_IST_MUPT_RMA_Images_h100.7"
 export MODS_VER="525.213.tar.gz"
+export MODS_folder="525.213"
 
-Script_VER="1.0.3"  ###script version 2024-08-16
+Script_VER="1.0.5"  ###script version 2024-08-16
 CFG_VERSION="1.0"
 PROJECT="SORT_TESLA"
 Process_Result=""
@@ -75,6 +79,10 @@ Final_status=""
 sort_diagname=""
 sort_diagver=""
 Run_Mode=0
+declare -u station
+declare -u fixture_id
+declare -u current_stc_name
+declare -u current_stc
 
 ######test station list######
 list_st="TEST" ###no need spare parts station list###
@@ -555,7 +563,7 @@ if [ -d ${Diag_Path}/${MACHINE}/${diag_name} ]; then
 	cd $mods
 	tar -xf ${diag_VER} 
 	if [ $? -ne 0 ];then
-		show_fail_message "Please make sure exist diag zip files"
+		show_fail_message "Please delete ${diag_VER} and reboot"
 		show_fail_msg "DownLoad Diag FAIL"
 		exit 1
 	fi	
@@ -571,7 +579,7 @@ else
 		cd $mods
 		tar -xf ${diag_VER} 
 		if [ $? -ne 0 ];then
-			show_fail_message "Please make sure exist diag zip files"
+			show_fail_message "Please delete ${diag_VER} and reboot"
 			show_fail_msg "DownLoad Diag FAIL"
 			exit 1
 		fi	
@@ -589,7 +597,7 @@ if [ -f $HEAVEN/$HEAVEN_VER ];then
 	cd $mods/core/mods0
 	tar -xf $HEAVEN_VER 
 	if [ $? -ne 0 ];then
-		show_fail_message "Please make sure exist HEAVEN zip files"
+		show_fail_message "Please delete ${diag_VER} and reboot"
 		show_fail_msg "DownLoad HEAVEN FAIL"
 		exit 1
 	fi		
@@ -603,7 +611,7 @@ else
 		cd $mods/core/mods0
 		tar -xf $HEAVEN_VER 
 		if [ $? -ne 0 ];then
-			show_fail_message "Please make sure exist HEAVEN zip files"
+			show_fail_message "Please delete ${diag_VER} and reboot"
 			show_fail_msg "DownLoad HEAVEN FAIL"
 			exit 1
 		fi		
@@ -616,7 +624,7 @@ else
 			cd $mods/core/mods0
 			tar -xf $HEAVEN_VER 
 			if [ $? -ne 0 ];then
-				show_fail_message "Please make sure exist HEAVEN zip files"
+				show_fail_message "Please delete ${diag_VER} and reboot"
 				show_fail_msg "DownLoad HEAVEN FAIL"
 				exit 1
 			fi		
@@ -640,7 +648,7 @@ if [ -d ${Diag_Path}/${MACHINE}/${sort_diagname} ]; then
 	cd $mods
 	tar -xf ${sort_diagver} 
 	if [ $? -ne 0 ];then
-		show_fail_message "Please make sure exist sort_diag zip files"
+		show_fail_message "Please delete ${sort_diagver} and reboot "
 		show_fail_msg "DownLoad Sort_Diag FAIL"
 		exit 1
 	fi	
@@ -656,7 +664,7 @@ else
 		cd $mods
 		tar -xf ${sort_diagver} 
 		if [ $? -ne 0 ];then
-			show_fail_message "Please make sure exist sort_diag zip files"
+			show_fail_message "Please delete ${sort_diagver} and reboot"
 			show_fail_msg "DownLoad Sort_Diag FAIL"
 			exit 1
 		fi	
@@ -679,7 +687,7 @@ if [ $MACHINE = SG520 ];then
 		cd $mods/core/mods0
 		tar -xf $DFX 
 		if [ $? -ne 0 ];then
-			show_fail_message "Please make sure exist DFX zip files"
+			show_fail_message "Please delete $DFX and reboot "
 			show_fail_msg "DownLoad DFX FAIL"
 			exit 1
 		else
@@ -695,7 +703,7 @@ if [ $MACHINE = SG520 ];then
 			cd $mods/core/mods0
 			tar -xf $DFX 
 			if [ $? -ne 0 ];then
-				show_fail_message "Please make sure exist DFX zip files"
+				show_fail_message "Please delete $DFX and reboot"
 				show_fail_msg "DownLoad DFX FAIL"
 				exit 1
 			else
@@ -710,7 +718,7 @@ if [ $MACHINE = SG520 ];then
 				cd $mods/core/mods0
 				tar -xf $DFX 
 				if [ $? -ne 0 ];then
-					show_fail_message "Please make sure exist DFX zip files"
+					show_fail_message "Please delete $DFX and reboot"
 					show_fail_msg "DownLoad DFX FAIL"
 					exit 1
 				else
@@ -901,7 +909,23 @@ if [ $Run_Mode = "0" ];then
 			show_fail	
 		fi	
 	else
-		test_item="${current_stc_name}"
+		if [ "$MACHINE" = "SG520" ];then
+			status=0
+			flg=0	
+			while [ $status = 0 ]; do
+				if [ $flg = 1 ]; then
+					read -p "Please Input station TEST or step2 again:" current_stc	 
+				else
+					read -p "Please Input station TEST or step2:" current_stc
+				fi
+				if [ "$current_stc" = "TEST" ] || [ "$current_stc" = "STEP2" ]; then
+					status=1
+				else
+					flg=1
+				fi
+			done
+		fi	
+		test_item="$current_stc"	
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
 			if [ $testqty = "2" ];then
@@ -925,6 +949,7 @@ if [ $Run_Mode = "0" ];then
 					reboot
 				fi	
 			else
+				#resf=$(find $LOGFILE/ -name "*${Output_Upper_SN}_P_1st*.zip" 2>/dev/null)
 				Upload_Log ${Output_Upper_SN} PASS
 				#show_pass
 				#sleep 20
@@ -948,185 +973,39 @@ if [ $Run_Mode = "0" ];then
 					show_fail
 				fi		
 			else
-				Upload_Log ${Output_Upper_SN} FAIL
-				#show_fail
+				resf=$(find $LOGFILE/ -name "*${Output_Upper_SN}_F_1st*.zip" 2>/dev/null)
+				if [ -n "$resf" ];then
+					Upload_Log ${Output_Upper_SN} FAIL
+				else
+					show_fail_message "There is no FAIL log if looping stop or stuck stop please reboot and run step2"
+				fi	
+				
 			fi	
 		fi	
 	fi	
 else
 	cd $mods
-	# if [ $testqty = "2" ];then	
-		# upload_start_log  ${Scan_Upper_SN}
-		# upload_start_log  ${Scan_Lower_SN}
-	# else
-		# upload_start_log  ${Scan_Upper_SN}
-	# fi	
+	
 	if [ ${station} = "FT" ];then
 		test_item="BAT BIT FCT FPF"
 		run_command "$test_item"
-		# if [ $? -eq 0 ];then
-			# if [ $testqty = "2" ];then
-				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FPF*" 2>/dev/null)
-				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FPF*" 2>/dev/null)		
-				# if [ -n "$resf" ] && [ -n "$resc" ];then
-					# # Upload_Log ${Scan_Upper_SN} PASS
-					# # Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# elif [ -n "$resf" ] ; then
-					# # Upload_Log ${Scan_Upper_SN} PASS
-					# # show_pass
-					# #sleep 20
-					# #reboot
-				# else
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# fi			
-			# else
-				# Upload_Log ${Scan_Upper_SN} PASS
-				# show_pass
-				# #sleep 20
-				# #reboot
-			# fi	
-		# else
-			# if [ $testqty = "2" ];then
-				# Upload_Log ${Scan_Upper_SN} FAIL
-				# Upload_Log ${Scan_Lower_SN} FAIL
-				# show_fail
-			# else
-				# Upload_Log ${Scan_Upper_SN} FAIL
-				# show_fail
-			# fi	
-		# fi
+
 	elif [ ${station} = "FLA" ];then
 		test_item="rwcsv FLA"
 		run_command "$test_item"
-		# if [ $? -eq 0 ];then
-			# Upload_Log ${Scan_Upper_SN} PASS
-			# show_pass
-			# show_pass_message "FLA station need poweroff and turn off/on 54v PSU as well"	
-		# else
-			# Upload_Log ${Scan_Upper_SN} FAIL
-			# show_fail			
-		# fi
+	
 	elif [ ${station} = "FLB" ];then
 		test_item="rwcsv FLB"
 		run_command "$test_item"
-		# if [ $? -eq 0 ];then
-			# Upload_Log ${Scan_Upper_SN} PASS
-			# show_pass
-			# show_pass_message "FLB station need poweroff and turn off/on 54v PSU as well"	
-		# else
-			# Upload_Log ${Scan_Upper_SN} FAIL
-			# show_fail	
-		# fi
+
 	elif [ ${station} = "CHIFLASH" ];then ####for clear BBX station### 2024-04-26
 		test_item="rwcsv CHIFLASH"
 		run_command "$test_item"
-		# if [ $? -eq 0 ];then
-			# if [ $testqty = "2" ];then
-				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
-				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FLA*" 2>/dev/null)
-				# if [ -n "$resf" ] && [ -n "$resc" ];then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# elif [ -n "$resf" ] ; then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# else
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# fi	
-			# else
-				# Upload_Log ${Scan_Upper_SN} PASS
-				# show_pass
-				# #sleep 20
-				# #reboot
-			# fi	
-		# else
-			# if [ $testqty = "2" ];then
-				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
-				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_FLA*" 2>/dev/null)
-				# if [ -n "$resf" ];then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# Upload_Log ${Scan_Lower_SN} FAIL
-					# show_fail
-				# elif [ -n "$resc" ];then	
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# Upload_Log ${Scan_Upper_SN} FAIL
-					# show_fail
-				# else
-					# Upload_Log ${Scan_Upper_SN} FAIL
-					# Upload_Log ${Scan_Lower_SN} FAIL
-					# show_fail
-				# fi		
-			# else
-				# Upload_Log ${Scan_Upper_SN} FAIL
-				# show_fail
-			# fi	
-		# fi
+
 	else
 		test_item="${station}"
 		run_command "$test_item"
-		# if [ $? -eq 0 ];then
-			# if [ $testqty = "2" ];then
-				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
-				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
-				# if [ -n "$resf" ] && [ -n "$resc" ];then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# elif [ -n "$resf" ] ; then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# else
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# show_pass
-					# #sleep 20
-					# #reboot
-				# fi	
-			# else
-				# Upload_Log ${Scan_Upper_SN} PASS
-				# show_pass
-				# #sleep 20
-				# #reboot
-			# fi	
-		# else
-			# if [ $testqty = "2" ];then
-				# resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
-				# resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
-				# if [ -n "$resf" ];then
-					# Upload_Log ${Scan_Upper_SN} PASS
-					# Upload_Log ${Scan_Lower_SN} FAIL
-					# show_fail
-				# elif [ -n "$resc" ];then	
-					# Upload_Log ${Scan_Lower_SN} PASS
-					# Upload_Log ${Scan_Upper_SN} FAIL
-					# show_fail
-				# else
-					# Upload_Log ${Scan_Upper_SN} FAIL
-					# Upload_Log ${Scan_Lower_SN} FAIL
-					# show_fail
-				# fi		
-			# else
-				# Upload_Log ${Scan_Upper_SN} FAIL
-				# show_fail
-			# fi	
-		# fi	
+		
 	fi
 fi	
 	
@@ -1159,7 +1038,7 @@ fi
 end_time=`date +"%Y%m%d_%H%M%S"`
 filename=$1_"${current_stc_name}"_"$end_time"_$2.log
 
-cd $mods
+cd $LOGFILE
 echo "${PROJECT} L5 Functional Test" >"${filename}"
 echo "${diag_name} (config version: ${CFG_VERSION})" >>"${filename}"
 echo "============================================================================" >>"${filename}"
@@ -1177,7 +1056,7 @@ echo "**************************************************************************
 echo "FUNCTIONAL TESTING" >>"${filename}"
 echo "****************************************************************************" >>"${filename}"
 
-cat $mods/log.txt | tr -d "\000" >>"${filename}"
+cat $LOGFILE/log.txt | tr -d "\000" >>"${filename}"
 
 ## upload test log to log server
 if [ -d ${Logs_Path}/$PROJECT ]; then
@@ -1209,24 +1088,24 @@ run_command()
         [ $? -eq 0 ] && continue
 
         echo -e "\033[32m Begin $m module Test\033[0m"
-        echo " " | tee -a $mods/log.txt
-        date +"<Info message>: $m - start time: %F %T" | tee -a $mods/log.txt 
+        echo " " | tee -a $LOGFILE/log.txt
+        date +"<Info message>: $m - start time: %F %T" | tee -a $LOGFILE/log.txt 
         cd $mods
         ./$m.sh 
         if [ $? -ne 0 ]; then
-            echo "$m module Test ------------ [ FAIL ]" | tee -a $mods/log.txt
+            echo "$m module Test ------------ [ FAIL ]" | tee -a $LOGFILE/log.txt
             #color "$m module test" FAIL
-            date +"<Info message>: $m - end time: %F %T" | tee -a $mods/log.txt
+            date +"<Info message>: $m - end time: %F %T" | tee -a $LOGFILE/log.txt
 			Fail_Module=$m
             echo " "
-            echo " " | tee -a $mods/log.txt 
+            echo " " | tee -a $LOGFILE/log.txt 
             return 1
         else
-            echo "$m module Test ----------- [ PASS ]" | tee -a $mods/log.txt
+            echo "$m module Test ----------- [ PASS ]" | tee -a $LOGFILE/log.txt
             #color "$m module test" PASS
-            date +"<Info message>: $m - end time: %F %T" | tee -a $mods/log.txt 
+            date +"<Info message>: $m - end time: %F %T" | tee -a $LOGFILE/log.txt 
             echo " "
-            echo " " | tee -a $mods/log.txt
+            echo " " | tee -a $LOGFILE/log.txt
         fi
     done
 	
@@ -1253,8 +1132,8 @@ if [ $Run_Mode = "0" ];then
 	get_information
 	script_check
 	if [ $MACHINE = SG520 ];then
-		prepare_file $ISTdata $IST_file
-		prepare_file $ISTdata $MODS_VER
+		prepare_file $ISTdata $IST_file $IST_folder
+		prepare_file $ISTdata $MODS_VER $MODS_folder
 	fi	
 
 	if [ $current_stc_name = "OQA" ]; then
@@ -1275,6 +1154,7 @@ if [ $Run_Mode = "0" ];then
 		#echo $diag_VER
 		#pause
 		if [ -f $mods/$diag_VER ] && [ -f $mods/$sort_diagver ]; then  ###add exist diag and sort_diag no need download 
+			DownLoad
 			Run_Diag
 		else
 			DownLoad
@@ -1305,39 +1185,40 @@ else
 	read -p "Please Input station :" station
 	#echo $station
 	#pause
-	if [[ "$list_st_all" =~ "$station" ]];then
-		if [ $station = "OQA" ];then
-			diag_name=$(get_config "Diag2")
-			diag_VER=$diag_name.tar.gz
-			if [ ! -f $mods/$diag_VER ];then
-				DownLoad
-				Run_Diag
-			else
-				Run_Diag
-			fi
-		elif [ $station = "CHIFLASH" ];then
-			diag_name=$(get_config "Diag3")
-			diag_VER=$diag_name.tar.gz
-			if [ ! -f $mods/$diag_VER ];then
-				DownLoad
-				Run_Diag
-			else
-				Run_Diag
-			fi
+		if [ $MACHINE = SG520 ];then
+		prepare_file $ISTdata $IST_file
+		prepare_file $ISTdata $MODS_VER
+	fi	
+
+	if [ $station = "OQA" ]; then
+		diag_name=$(get_config "Diag2")
+		diag_VER=$diag_name.tar.gz
+		if [ -f $mods/$diag_VER ]; then
+			Run_Diag
 		else
-			diag_name=$(get_config "Diag1")
-			diag_VER=$diag_name.tar.gz
-			if [ ! -f $mods/$diag_VER ];then
-				DownLoad
-				Run_Diag
-			else
-				Run_Diag
-			fi
+			DownLoad
+			Run_Diag			
+		fi
+
+	elif [[ "$list_st" =~ "$station" ]];then
+		diag_name=$(get_config "Diag1")
+		diag_VER=$diag_name.tar.gz
+		sort_diagname=$(get_config "Diag2")
+		sort_diagver=$sort_diagname.tar.gz
+		#echo $diag_VER
+		#pause
+		if [ -f $mods/$diag_VER ] && [ -f $mods/$sort_diagver ]; then  ###add exist diag and sort_diag no need download 
+			Run_Diag
+		else
+			DownLoad
+			Run_Diag
+		
 		fi
 	else
 		show_fail_message "station wrong please check!!!"
-		exit 1
-	fi	
+		exit 1 
+		
+	fi
 fi	
 }
 
@@ -1381,19 +1262,18 @@ upload_start_log()
 #####wareconn control script version#####
 script_check()
 {
-
 	if [ "${Script_VER}" = "${Input_Script}" ];then
 		echo "Script Version is ${Script_VER}"
 	else
 		echo "Script Version is ${Script_VER}"
-		if [ -f $Script_File ];then
-			cp -rf $Script_File /home/diags/nv
+		if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
+			cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /home/diags/nv/$Script_File
 			sleep 15
 			reboot
 		else
 			Input_Server_Connection
-			if [ -f $Script_File ];then
-				cp -rf $Script_File /home/diags/nv
+			if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
+				cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /home/diags/nv/$Script_File
 				sleep 15
 				reboot
 			else
@@ -1401,8 +1281,7 @@ script_check()
 				exit 1
 			fi
 		fi		
-	fi	
-
+	fi
 
 }
 
@@ -1412,36 +1291,68 @@ prepare_file()
 
 
 	#DFX=$(get_config "Diag3")
-	if [ -f $1/$2 ];then
-		show_pass_message "$2 already exist!!!"		
+	if [ -d $1/$3 ] && [ -f $1/$2.txt ];then
+		cd $1
+		echo "check $2 md5vaule pleace waiting..."
+		sumvaul=$(md5sum -c $2.txt)
+		echo $sumvaul | grep "OK" > /dev/null
+		if [ $? -eq 0 ];then
+			show_pass_message "$2 already exist and complete!!!"
+		else
+			show_fail_message "pleace check if $1/$2 is complete !!!"
+			show_fail_message "delete $1/$2 and reboot download again !!!"
+			exit 1
+		fi	
 	else
 		#echo "${Diag_Path}/HEAVEN/$HEAVEN_VER"
 		#pause
-		if [ -f ${Diag_Path}/HEAVEN/$2 ]; then
+		if [ -f ${Diag_Path}/HEAVEN/$2 ] && [ -f ${Diag_Path}/HEAVEN/$2.txt ]; then
 			show_pass_message "DownLoad $2 From Server Please Waiting ..."
 			cp -rf ${Diag_Path}/HEAVEN/$2 $1
+			cp -rf ${Diag_Path}/HEAVEN/$2.txt $1
 			cd $1
+			echo "check $2 md5vaule pleace waiting..."
+			sumvaul=$(md5sum -c $2.txt)
+			echo $sumvaul | grep "OK" > /dev/null
+			if [ $? -eq 0 ];then
+				show_pass_message "$2 already exist and complete!!!"
+			else
+				show_fail_message "pleace check if $1/$2 is complete !!!"
+				show_fail_message "delete $1/$2 and reboot download again !!!"
+				exit 1
+			fi
 			tar -xf $2 
 			if [ $? -ne 0 ];then
-				show_fail_message "Please make sure exist $2 zip files"
+				show_fail_message "delete $1/$2 and reboot download again !!!"
 				show_fail_msg "DownLoad $2 file FAIL"
 				exit 1
 			else
-				show_pass_msg "DownLoad $2 pass"
+				show_pass_msg "DownLoad $2 ok"
 			fi		
 		else
 			Input_Server_Connection
-			if [ -f ${Diag_Path}/HEAVEN/$2 ]; then
+			if [ -f ${Diag_Path}/HEAVEN/$2 ] && [ -f ${Diag_Path}/HEAVEN/$2.txt ]; then
 				show_pass_message "DownLoad $2 From Server Please Waiting ..."
 				cp -rf ${Diag_Path}/HEAVEN/$2 $1
+				cp -rf ${Diag_Path}/HEAVEN/$2.txt $1
 				cd $1
+				echo "check $2 md5vaule pleace waiting..."
+				sumvaul=$(md5sum -c $2.txt)
+				echo $sumvaul | grep "OK" > /dev/null
+				if [ $? -eq 0 ];then
+					show_pass_message "$2 already exist and complete!!!"
+				else
+					show_fail_message "pleace check if $1/$2 is complete !!!"
+					show_fail_message "delete $1/$2 and reboot download again !!!"
+					exit 1
+				fi
 				tar -xf $2
 				if [ $? -ne 0 ];then
-					show_fail_message "Please make sure exist $2 file zip files"
+					show_fail_message "delete $1/$2 and reboot download again !!!"
 					show_fail_msg "DownLoad $2 file FAIL"
 					exit 1
 				else
-					show_pass_msg "DownLoad $2 pass"
+					show_pass_msg "DownLoad $2 ok"
 				fi		
 			else
 				show_fail_message "$2 file isn't exist Please Call TE"
@@ -1484,7 +1395,6 @@ get_bios(){
 
     echo $bios
 }
-
 #############################################################################################################
 #############################################################################################################
 ####Main Part####
@@ -1566,6 +1476,11 @@ else
 fi	
 
 #echo $testqty
+operator_id=$(echo $(cat ${SCANFILE} | grep "^operator_id=" | awk -F '=' '{print$2}'))
+if [ "$operator_id" = "DEBUG001" ];then
+	Run_Mode=1
+	PROJECT="DEBUG"
+fi	
 
 if [ $testqty = "2" ]; then
 	if [ $Run_Mode = "0" ];then
