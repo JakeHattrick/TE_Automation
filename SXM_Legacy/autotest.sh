@@ -8,10 +8,10 @@
 ##
 ## Version History
 ##-------------------------------
-## Version       : 1.0.10
-## Release date  : 2025-04-17
+## Version       : 1.0.11
+## Release date  : 2024-03-08
 ## Revised by    : Rick Stingel
-## Description   : Initial release
+## Description   : QOL Features
 ## add compatibility with clear BBX station 2024-04-26 "when wareconn can get test information by station this function no need"
 ## Add the transmission parameters type, and return the information according to the warranty and the station 2024-05-07
 ## Add script version control 2024-05-07
@@ -23,15 +23,25 @@
 ## add upload result to LF API 2024-11-08
 ##**********************************************************************************
 
-[ -d "/mnt/nv/logs/" ] || mkdir /mnt/nv/logs
-[ -d "/mnt/nv/HEAVEN/" ] || mkdir /mnt/nv/HEAVEN/
-[ -d "/mnt/nv/server_diag" ] || mkdir /mnt/nv/server_diag
-[ -d "/mnt/nv/server_logs" ] || mkdir /mnt/nv/server_logs
-[ -d "/mnt/nv/mods/test" ] || mkdir /mnt/nv/mods/test
-[ -d "/mnt/nv/mods/test/cfg" ] || mkdir /mnt/nv/mods/test/cfg
-[ -d "/mnt/nv/mods/test/logs" ] || mkdir /mnt/nv/mods/test/logs
 
-export HEAVEN="/mnt/nv/HEAVEN/"
+#####################################################################
+#                                                                   #
+# BEGIN RUNTIME CONFIGURATIONS										#
+#																    #
+# Change these variabled depending on where the test is being run 	#
+# 																	#
+#####################################################################
+# Currently the only available factory options are NC and TJ
+CURRENT_FACTORY="NC"
+
+#####################################################################
+#                                                                   #
+# END RUNTIME CONFIGURATIONS                                        #
+#                                                                   #
+#####################################################################
+
+
+export HEAVEN="/mnt/nv/HEAVEN"
 export Diag_Path="/mnt/nv/server_diag"
 export Logs_Path="/mnt/nv/server_logs"
 export mods="/mnt/nv/mods/test"
@@ -48,10 +58,18 @@ export NC_API_IP="192.168.102.20"
 export TJ_API_IP="10.67.240.77"
 export OPID="$Diag_Path/OPID/OPID.ini"  ###add check operator ID 4/4/2024####
 export Script_File="autotest.sh"
+export DASHBOARD="$Logs_Path/$PROJECT/Dashboard/"
 declare -u station
 #declare -u operator_id
 declare -u fixture_id
 
+[ -d $HEAVEN ] || mkdir $HEAVEN
+[ -d $Diag_Path ] || mkdir $Diag_Path
+[ -d $Logs_Path ] || mkdir $Logs_Path
+[ -d $mods ] || mkdir $mods
+[ -d $LOGFILE ] || mkdir $LOGFILE
+[ -d "/mnt/nv/logs/" ] || mkdir /mnt/nv/logs
+[ -d "/mnt/nv/mods/test/cfg" ] || mkdir /mnt/nv/mods/test/cfg
 
 Script_VER="1.0.10"
 CFG_VERSION="1.0.10"
@@ -95,20 +113,39 @@ Input_Upper_Status=""
 Input_Upper_HSC=""
 Tstation=""
 cont="true"
+token=""
+Diagserver_IP=""
+Logserver_IP=""
+API_IP=""
+API_ID=""
+API_SECRET=""
+ErrorCodeMessage=""
 
 
 ######test station list######
-list_st="FLA BAT BIT FCT FPF OQA FT FLB IST CHIFLASH DG5 FLC IST2 EFT ZPI FLA2" ###no need spare parts station list###
-list_stn="NVL DG3 DG4 IOT FLK"                   ###need more spare parts station list###
-single_list_stn="FLA FLB CHIFLASH IOT FLK NVL FLC FLA2"                    ###single baord station list###
-list_st_all="CHIFLASH FLA FLB BAT BIT FCT FT FPF OQA IST NVL DG3 DG4 DG5 IOT FLK FLA2 FLC IST2 EFT ZPI" ###ALL TEST STATION 2024-06-15
+#list_st is for Stations that do not need spare parts.
+list_st="FLA BAT BIT FCT FPF OQA FT FLB IST CHIFLASH DG5 FLC IST2 EFT ZPI FLA2"
+#list_stn is for Stations that need spare parts.
+list_stn="NVL DG3 DG4 IOT FLK"
+#single_list_stn is for Stations that only support 1 board at a time.
+single_list_stn="FLA FLB CHIFLASH IOT FLK NVL FLC FLA2"
+#list_st_all is a list of all test stations.
+list_st_all="CHIFLASH FLA FLB BAT BIT FCT FT FPF OQA IST NVL DG3 DG4 DG5 IOT FLK FLA2 FLC IST2 EFT ZPI"
+
+
+####TJAPI###############################
+TJ_ID="client_id=NocHScsf53aqE"
+TJ_SECRET="client_secret=f8d6b0450c2a2af273a26569cdb0de04"
+####NCAPI###############################
+NC_ID="client_id=vE7BhzDJhqO"
+NC_SECRET="client_secret=0f40daa800fd87e20e0c6a8230c6e28593f1904c7edfaa18cbbca2f5bc9272b5"
+
 
 #####################################################################
 #                                                                   #
 # Pause                                                             #
 #                                                                   #
 #####################################################################
-
 pause( )
 {
 	echo "press any key to continue......"
@@ -131,71 +168,6 @@ get_config()
     fi
 }
 
-######################################################################
-#                                                                    #
-# Show Pass message (color: green)                                   #
-#                                                                    #
-######################################################################
-show_pass_msg()
-{
-    _TEXT=$@
-    len=${#_TEXT}
-
-    while [ $len -lt 60 ]
-    do
-    _TEXT=$_TEXT"-"
-    len=${#_TEXT}
-    done
-
-    _TEXT=$_TEXT"[ PASS ]"
-
-    echo -ne "\033[32m"
-    echo -ne "\t"$_TEXT
-    echo -e "\033[0m"
-}
-
-######################################################################
-#                                                                    #
-# Show Fail message (color: red)                                     #
-#                                                                    #
-######################################################################
-show_fail_msg()
-{
-    _TEXT=$@
-    len=${#_TEXT}
-
-    while [ $len -lt 60 ]
-    do
-    _TEXT=$_TEXT"-"
-    len=${#_TEXT}
-    done
-
-    _TEXT=$_TEXT"[ FAIL ]"
-
-    echo -ne "\033[31m"
-    echo -ne "\t"$_TEXT
-    echo -e "\033[0m"
-
-#    convert_err "$1"
-}
-
-######################################################################
-#                                                                    #
-# Show title message                                                 #
-#                                                                    #
-######################################################################
-show_title()
-{
-    _TEXT=$@
-    len=${#_TEXT}
-
-    while [ $len -lt 60 ]
-    do
-    _TEXT=$_TEXT"-"
-    len=${#_TEXT}
-    done
-    echo "$_TEXT"
-}
 
 ######################################################################
 #                                                                    #
@@ -210,6 +182,7 @@ show_pass_message()
     echo
 }
 
+
 ######################################################################
 #                                                                    #
 # Show Warning message (color: yellow)                               #
@@ -223,6 +196,7 @@ show_warn_message()
 	echo
 }
 
+
 ######################################################################
 #                                                                    #
 # Show Fail message (color: red)                                     #
@@ -235,6 +209,7 @@ show_fail_message()
 	echo -ne "\033[31m$TEXT\033[0m"
 	echo
 }
+
 
 #####################################################################
 #                                                                   #
@@ -293,41 +268,19 @@ show_fail()
 ####get information from wareconn####################################
 Input_Wareconn_Serial_Number_RestAPI_Mode()
 {
-	###API
-
 	now_stn=""
 	Input_RestAPI_Message=""
-	####TJAPI###############################
-	TID="client_id=NocHScsf53aqE"
-	TSECRET="client_secret=f8d6b0450c2a2af273a26569cdb0de04"
-	####NCAPI###############################
-	ID="client_id=vE7BhzDJhqO"
-	SECRET="client_secret=0f40daa800fd87e20e0c6a8230c6e28593f1904c7edfaa18cbbca2f5bc9272b5"
-	########################################
-	TYPE="grant_type=client_credentials"
-	furl="http://$NC_API_IP/api/v1/Oauth/token"
-	surl="http://$NC_API_IP/api/v1/test-profile/get"
-	turl="http://$NC_API_IP/api/v1/Station/get"
-	##get_token#############################
 
-	echo "get token from wareconn API"
-	Input_RestAPI_Message=$(curl -X GET "$NC_API_IP/api/v1/Oauth/token?${ID}&${SECRET}&${TYPE}")
-	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		token=$(echo "$Input_RestAPI_Message" | awk -F '"' '{print $10 }')
-		show_pass_message "get_token successful:$token"	
-	else
-		show_fail_message "$Input_RestAPI_Message"
-		show_fail_message "get token Fail Please check net cable or call TE"
-		exit 1
-	fi
+	##get_token#############################
+	getToken
 
 
 	##get_information from wareconn#########
 	echo "get test information from wareconn API "
 		if [ $Run_Mode = 0 ];then
-			Input_RestAPI_Message=$(curl -X GET "$surl" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":'"$1"',"type":"war,sta"}') ####add parameters type 2024-05-07
+			Input_RestAPI_Message=$(curl -X GET "$Test_Profile_url" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":'"$1"',"type":"war,sta"}') ####add parameters type 2024-05-07
 		else
-			Input_RestAPI_Message=$(curl -X GET "$surl?serial_number=$1&type=stc&stc_name=$2" -H "content-type: application/json" -H "Authorization: Bearer "$token"")
+			Input_RestAPI_Message=$(curl -X GET "$Test_Profile_url?serial_number=$1&type=stc&stc_name=$2" -H "content-type: application/json" -H "Authorization: Bearer "$token"")
 		fi
 	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
 		if [ -f $mods/cfg/$1.RSP ] && [ "$Run_Mode" = "0" ];then
@@ -347,7 +300,7 @@ Input_Wareconn_Serial_Number_RestAPI_Mode()
 				show_fail_message "$1 have pass $Fstation station but wareconn not please call TE or wareconn team!!!"
 				exit 1
 			else
-				show_pass_msg "$1 Get test information from wareconn!!!"
+				show_pass_message "$1 Get test information from wareconn!!!"
 			fi
 		else
 			Input_RestAPI_Message=$(echo $Input_RestAPI_Message | sed 's/"code":0,"data"://g')
@@ -358,7 +311,7 @@ Input_Wareconn_Serial_Number_RestAPI_Mode()
 			Input_RestAPI_Message=$(echo $Input_RestAPI_Message | sed 's/:/=/g')
 			Input_RestAPI_Message=$(echo $Input_RestAPI_Message | sed 's/"//g')
 			echo "$Input_RestAPI_Message" | awk -F ',' '{ for (i=1; i<=NF; i++) print $i }' > $mods/cfg/$1.RSP
-			show_pass_msg "$1 Get test information from wareconn!!!"
+			show_pass_message "$1 Get test information from wareconn!!!"
 		fi
 	else
 		show_fail_message "$Input_RestAPI_Message"
@@ -375,7 +328,7 @@ Input_Server_Connection()
 	while true
 		do
 			umount $Diag_Path >/dev/null 2>&1
-			mount -t cifs -o username=administrator,password=TJ77921~ //$NC_diagserver_IP/e/current $Diag_Path
+			mount -t cifs -o username=administrator,password=TJ77921~ //$Diagserver_IP/e/current $Diag_Path
 			if [ $? -eq 0 ];then
 				break
 			fi
@@ -510,12 +463,16 @@ Output_Scan_Infor()
 	sed -i 's/fixture_id=.*$/fixture_id='${fixture_id}'/g' $SCANFILE
 	sed -i 's/serial_number=.*$/serial_number='${Scan_Upper_SN}'/g' $SCANFILE
 	sed -i 's/serial_number2=.*$/serial_number2='${Scan_Lower_SN}'/g' $SCANFILE
-	show_pass_msg "SCAN info OK"
+	show_pass_message "SCAN info OK"
 
 }
 
 
-#####Read serial number from tester###################################
+#####################################################################
+#                                                                   #
+# Read serial number from tester                                    #
+#                                                                   #
+#####################################################################
 Read_SN()
 {
 	if [ ! -f "nvflash_mfg" ];then
@@ -532,34 +489,38 @@ Read_SN()
 		Output_Upper_SN=$(./nvflash_mfg -B $port1  --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 		Output_Lower_SN=$(./nvflash_mfg -B $port2  --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 		if [ -z ${Output_Upper_SN} ] && [ -z ${Output_Lower_SN} ]; then
-			show_fail_msg "Read SN error Please check!!!"
+			show_fail_message "Read SN error Please check!!!"
 			exit 1
 		else
 			show_pass_message "######SerialNumber1:$Output_Upper_SN######"
 			show_pass_message "######SerialNumber2:$Output_Lower_SN######" 
-			show_pass_msg "Read SN OK"
+			show_pass_message "Read SN OK"
 			testqty="2"
 		fi
 	elif [ $counts = "1" ]; then
 		Output_Upper_SN=$(./nvflash_mfg --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 		if [ -z ${Output_Upper_SN} ]; then
-			show_fail_msg "Read SN error Please check!!!"
+			show_fail_message "Read SN error Please check!!!"
 			exit 1
 		else
 			show_pass_message "######SerialNumber1:$Output_Upper_SN######"
-			show_pass_msg "Read SN OK"
+			show_pass_message "Read SN OK"
 			testqty="1"	
 		fi
 	else
 		show_fail_message "Can't Detect Cards Please Insert one Card"
-		show_fail_msg "Read SN FAIL"
+		show_fail_message "Read SN FAIL"
 		exit 1 	
 		
 	fi
 }
 
 
-#####download diag from diagserver#####################################
+#####################################################################
+#                                                                   #
+# Download Diag from Diagserver                                    	#
+#                                                                   #
+#####################################################################
 DownLoad()
 {
 
@@ -577,7 +538,7 @@ DownLoad()
 		tar -xf ${diag_VER} 
 		if [ $? -ne 0 ];then
 			show_fail_message "Local: DIAG zip not found after download"
-			show_fail_msg "DownLoad Diag FAIL"
+			show_fail_message "DownLoad Diag FAIL"
 			exit 1
 		fi	
 		#cp  ${Diag_Path}/${MACHINE}/${NVFLAH_VER}/* 
@@ -593,13 +554,13 @@ DownLoad()
 			tar -xf ${diag_VER} 
 			if [ $? -ne 0 ];then
 				show_fail_message "Local: DIAG zip not found after download"
-				show_fail_msg "DownLoad Diag FAIL"
+				show_fail_message "DownLoad Diag FAIL"
 				exit 1
 			fi	
 			#cp  ${Diag_Path}/${MACHINE}/${NVFLAH_VER}/* ./
 		else
 			show_fail_message "Diag Server: Diag version $diag_name not found. Please Call TE"
-			show_fail_msg "DownLoad Diag FAIL"
+			show_fail_message "DownLoad Diag FAIL"
 			exit 1
 		fi	
 	fi
@@ -612,7 +573,7 @@ DownLoad()
 			tar -xf $HEAVEN_VER 
 			if [ $? -ne 0 ];then
 				show_fail_message "Local: HEAVEN zip not found after download"
-				show_fail_msg "DownLoad HEAVEN FAIL"
+				show_fail_message "DownLoad HEAVEN FAIL"
 				exit 1
 			fi		
 		else
@@ -626,7 +587,7 @@ DownLoad()
 				tar -xf $HEAVEN_VER 
 				if [ $? -ne 0 ];then
 					show_fail_message "Local: HEAVEN zip not found after download"
-					show_fail_msg "DownLoad HEAVEN FAIL"
+					show_fail_message "DownLoad HEAVEN FAIL"
 					exit 1
 				fi		
 			else
@@ -639,13 +600,13 @@ DownLoad()
 					tar -xf $HEAVEN_VER 
 					if [ $? -ne 0 ];then
 						show_fail_message "Local: HEAVEN zip not found after download"
-						show_fail_msg "DownLoad HEAVEN FAIL"
+						show_fail_message "DownLoad HEAVEN FAIL"
 						exit 1
 					fi		
 				else
 				
 					show_fail_message "Diag Server: HEAVEN version $HEAVEN_VER not found. Please Call TE"
-					show_fail_msg "DownLoad HEAVEN FAIL"
+					show_fail_message "DownLoad HEAVEN FAIL"
 					exit 1 
 				fi
 			fi
@@ -662,7 +623,7 @@ DownLoad()
 			# tar -xf $DFX 
 			# if [ $? -ne 0 ];then
 				# show_fail_message "Please make sure exist DFX zip files"
-				# show_fail_msg "DownLoad DFX FAIL"
+				# show_fail_message "DownLoad DFX FAIL"
 				# exit 1
 			# fi		
 		# else
@@ -676,7 +637,7 @@ DownLoad()
 				# tar -xf $DFX 
 				# if [ $? -ne 0 ];then
 					# show_fail_message "Please make sure exist DFX zip files"
-					# show_fail_msg "DownLoad DFX FAIL"
+					# show_fail_message "DownLoad DFX FAIL"
 					# exit 1
 				# fi		
 			# else
@@ -689,12 +650,12 @@ DownLoad()
 					# tar -xf $DFX 
 					# if [ $? -ne 0 ];then
 						# show_fail_message "Please make sure exist DFX zip files"
-						# show_fail_msg "DownLoad DFX FAIL"
+						# show_fail_message "DownLoad DFX FAIL"
 						# exit 1
 					# fi		
 				# else
 					# show_fail_message "DFX isn't exist Please Call TE"
-					# show_fail_msg "DownLoad DFX FAIL"
+					# show_fail_message "DownLoad DFX FAIL"
 					# exit 1 
 				# fi
 			# fi
@@ -704,21 +665,25 @@ DownLoad()
 	####Prepare BIOS####
 	if [ -f ${Diag_Path}/${MACHINE}/BIOS/${BIOS_NAME} ]; then
 		cp -rf ${Diag_Path}/${MACHINE}/BIOS/${BIOS_NAME} $mods
-		show_pass_msg "Diag download OK"
+		show_pass_message "Diag download OK"
 	else
 		Input_Server_Connection
 		if [ -f ${Diag_Path}/${MACHINE}/BIOS/${BIOS_NAME} ]; then
 			cp -rf ${Diag_Path}/${MACHINE}/BIOS/${BIOS_NAME} $mods
-			show_pass_msg "Diag download OK"
+			show_pass_message "Diag download OK"
 		else
 			show_fail_message "Please make sure $BIOS_NAME is exsit!!!"
-			show_fail_msg "Diag download Failure"
+			show_fail_message "Diag download Failure"
 			exit 1
 		fi
 	fi
 }
 
-#####run diag#########################################################
+#####################################################################
+#                                                                   #
+# Run Diag                                    						#
+#                                                                   #
+#####################################################################
 Run_Diag()
 {
 	if [ $Run_Mode = "0" ];then ###2024-06-15
@@ -1169,7 +1134,11 @@ Run_Diag()
 }
 
 
-####upload log to logserver###########################################
+#####################################################################
+#                                                                   #
+# Upload Log To Logserver                                    		#
+#                                                                   #
+#####################################################################
 Upload_Log()
 {
 	if [ $testqty = 2 ]; then
@@ -1214,7 +1183,7 @@ Upload_Log()
 		[ ! -d ${Logs_Path}/$PROJECT/${Input_Upper_PN} ] && mkdir ${Logs_Path}/$PROJECT/${Input_Upper_PN}
 		cp -rf *$1* ${Logs_Path}/$PROJECT/${Input_Upper_PN}
 		#If the repair team is running the script, and we fail, we want to copy the log to the leo folder
-		if [ "$2" = "FAIL" ] && [ "$Run_Mode" = "1" ]; then
+		if [ "$2" = "FAIL" ] && [ "$Run_Mode" = "1" ] && [ "$CURRENT_FACTORY" = "NC" ]; then
 			find . -maxdepth 1 -type d -name "*$1*" -exec cp -rf {} ${Logs_Path}/leo \;
 		fi
 		find . -type f -type d -name "*$1*" -exec mv {} ${Local_Logs} \;
@@ -1241,13 +1210,19 @@ Upload_Log()
 	fi	
 }
 
+
+#####################################################################
+#                                                                   #
+# Run Command                                    					#
+#                                                                   #
+#####################################################################
 run_command()
 {
     for m in $1; do
         echo $m | grep -i "untest" > /dev/null 2>&1
         [ $? -eq 0 ] && continue
 
-        echo -e "\033[32m Begin $m module Test\033[0m"
+		show_pass_message "Begin $m module Test"
         echo " " | tee -a $LOGFILE/log.txt
         date +"<Info message>: $m - start time: %F %T" | tee -a $LOGFILE/log.txt 
         cd $mods
@@ -1271,6 +1246,12 @@ run_command()
 	
 }
 
+
+#####################################################################
+#                                                                   #
+# Get Information From $SN.ini file                                 #
+#                                                                   #
+#####################################################################
 get_information()
 {
 	MACHINE=$(get_config "MACHINE")
@@ -1295,6 +1276,11 @@ get_information()
 }
 
 
+#####################################################################
+#                                                                   #
+# Analize Station                                 					#
+#                                                                   #
+#####################################################################
 analysis_sta()
 {
 	if [ $Run_Mode = "0" ];then #### 2024-06-15
@@ -1306,50 +1292,38 @@ analysis_sta()
 		if [ "$current_stc_name" = "OQA" ] ; then 
 			diag_name=$(get_config "Diag2")
 			diag_VER=$diag_name.tar.gz
-			if [ -f $mods/$diag_VER ]; then
-				Run_Diag
-			else
+			if [ ! -f $mods/$diag_VER ]; then
 				DownLoad
-				Run_Diag			
 			fi
+			Run_Diag
 			
 		elif [ "$current_stc_name" = "CHIFLASH" ];then ###for clear BBX station## 2024-04-26
 			diag_name=$(get_config "Diag3")
 			diag_VER=$diag_name.tar.gz
-			#echo $diag_VER
-			#pause
-			if [ -f $mods/$diag_VER ]; then
-				Run_Diag
-			else
+			if [ ! -f $mods/$diag_VER ]; then
 				DownLoad
-				Run_Diag
-			
 			fi
-			
+			Run_Diag
+
 		elif [[ "$list_st" =~ "$current_stc_name" ]];then
 			diag_name=$(get_config "Diag1")
 			diag_VER=$diag_name.tar.gz
-			#echo $diag_VER
-			#pause
-			if [ -f $mods/$diag_VER ]; then
-				Run_Diag
-			else
+			if [ ! -f $mods/$diag_VER ]; then
 				DownLoad
-				Run_Diag
-			
 			fi
+			Run_Diag
+
 		elif [[ "$list_stn" =~ "$current_stc_name" ]]; then
 			cont="false"
 			show_fail_message "Current Station is $current_stc_name, need more spare parts Please check!!!"
 			pause
 			diag_name=$(get_config "Diag1")
 			diag_VER=$diag_name.tar.gz
-			if [ -f $mods/$diag_VER ]; then
-				Run_Diag
-			else
+			if [ ! -f $mods/$diag_VER ]; then
 				DownLoad
-				Run_Diag
-			fi	
+			fi
+			Run_Diag
+
 		else
 			show_fail_message "Current Station is $current_stc_name not test station"
 			exit 1 
@@ -1360,45 +1334,41 @@ analysis_sta()
 		cp  ${Output_Upper_SN}.RSP cfg.ini
 		get_information
 		script_check
-		#read -p "Please Input station :" station
-		#echo $station
-		#pause
-		#if [[ "$list_st_all" =~ "$station" ]];then
-			if [ $station = "OQA" ];then
-				diag_name=$(get_config "Diag2")
-				diag_VER=$diag_name.tar.gz
-				if [ ! -f $mods/$diag_VER ];then
-					DownLoad
-					Run_Diag
-				else
-					Run_Diag
-				fi
-			elif [ $station = "CHIFLASH" ];then
-				diag_name=$(get_config "Diag3")
-				diag_VER=$diag_name.tar.gz
-				if [ ! -f $mods/$diag_VER ];then
-					DownLoad
-					Run_Diag
-				else
-					Run_Diag
-				fi
-			else
-				diag_name=$(get_config "Diag1")
-				diag_VER=$diag_name.tar.gz
-				if [ ! -f $mods/$diag_VER ];then
-					DownLoad
-					Run_Diag
-				else
-					Run_Diag
-				fi
+		if [ $station = "OQA" ];then
+			diag_name=$(get_config "Diag2")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
 			fi
-		#else
-			#show_fail_message "station wrong please check!!!"
-			#exit 1
-		#fi	
+			Run_Diag
+
+		elif [ $station = "CHIFLASH" ];then
+			diag_name=$(get_config "Diag3")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
+			fi
+			Run_Diag
+
+		else
+			diag_name=$(get_config "Diag1")
+			diag_VER=$diag_name.tar.gz
+			if [ ! -f $mods/$diag_VER ];then
+				DownLoad
+			fi
+			Run_Diag
+
+		fi
+
 	fi		
 }
 
+
+#####################################################################
+#                                                                   #
+# Upload Start Log                                 					#
+#                                                                   #
+#####################################################################
 upload_start_log()
 {
     start_log_time=`date +"%Y%m%d_%H%M%S"`
@@ -1415,25 +1385,20 @@ upload_start_log()
     echo "operator_id             :`grep "operator_id=" $SCANFILE |sed 's/.*= *//'`" >>"${filename}"
     echo "fixture_id              :`grep "fixture_id=" $SCANFILE |sed 's/.*= *//'`" >>"${filename}"
 
-    ## upload test log to log server
-	if [ -d ${Logs_Path}/$PROJECT ]; then
-		[ ! -d ${Logs_Path}/$PROJECT/${Input_Upper_PN} ] && mkdir ${Logs_Path}/$PROJECT/${Input_Upper_PN}
-		cp -rf *$1* ${Logs_Path}/$PROJECT/${Input_Upper_PN}
-		find . -name "*$1*" -exec mv {} ${Local_Logs} \;
-	else
+	if [ ! -d ${Logs_Path}/$PROJECT ]; then
 		Input_Server_Connection
-		if [ -d ${Logs_Path}/$PROJECT ]; then
-			[ ! -d ${Logs_Path}/$PROJECT/${Input_Upper_PN} ] && mkdir ${Logs_Path}/$PROJECT/${Input_Upper_PN}
-			cp -rf *$1* ${Logs_Path}/$PROJECT/${Input_Upper_PN}
-			find . -type f  -name "*$1*" -exec mv {} ${Local_Logs} \;
-		else
-			show_fail_message "Mounting log server fail."
-			exit 1 
-		fi
 	fi
+	[ ! -d ${Logs_Path}/$PROJECT/${Input_Upper_PN} ] && mkdir ${Logs_Path}/$PROJECT/${Input_Upper_PN}
+	cp -rf *$1* ${Logs_Path}/$PROJECT/${Input_Upper_PN}
+	find . -name "*$1*" -exec mv {} ${Local_Logs} \;
 }
 
-#####wareconn control script version##################################################################
+
+#####################################################################
+#                                                                   #
+# Wareconn control script version                                 	#
+#                                                                   #
+#####################################################################
 script_check()
 {
 	if [ "${Script_VER}" = "${Input_Script}" ];then
@@ -1442,17 +1407,17 @@ script_check()
 		echo "Script Version is ${Script_VER}"
 		if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
 			cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /mnt/nv/$Script_File
-			show_pass_msg "Script Version was updated to ${Input_Script}. Rebooting."
+			show_pass_message "Script Version was updated to ${Input_Script}. Rebooting."
 			sleep 5
 			reboot
 		else
 			Input_Server_Connection
 			if [ -f ${Diag_Path}/${Input_Script}_${Script_File} ];then
 				cp -rf ${Diag_Path}/${Input_Script}_${Script_File} /mnt/nv/$Script_File
-				sleep 15
+				sleep 5
 				reboot
 			else
-				show_fail_msg "Diag Server: ${Input_Script}_${Script_File} script not found"
+				show_fail_message "Diag Server: ${Input_Script}_${Script_File} script not found"
 				exit 1
 			fi
 		fi		
@@ -1460,7 +1425,11 @@ script_check()
 }
 
 
-#####DIAG server control script version##################################################################
+#####################################################################
+#                                                                   #
+# DIAG control script version                                 		#
+#                                                                   #
+#####################################################################
 script_check2()
 {
 	####self_update####
@@ -1480,7 +1449,11 @@ script_check2()
 }
 
 
-######################################################################################################
+#####################################################################
+#                                                                   #
+# Analize .tsg generated by Script to make $SN.log                  #
+#                                                                   #
+#####################################################################
 analysis_log()
 {
 	#If the script fails from this point onward we will now display the current station
@@ -1646,7 +1619,12 @@ analysis_log()
 	fi	
 }
 
-####install tool########################################################################################
+
+#####################################################################
+#                                                                   #
+# Install Tool                  									#
+#                                                                   #
+#####################################################################
 update()
 {
 	####ntpdate install###
@@ -1674,7 +1652,11 @@ update()
 }
 
 
-########################################################################################################
+#####################################################################
+#                                                                   #
+# Get Item Info                  									#
+#                                                                   #
+#####################################################################
 Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo()
 {
 	station_name=""
@@ -1686,35 +1668,11 @@ Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo()
 	service_status=""
 	ErrorMessage=""
 
-	###API
-
-	####TJAPI###############################
-	TID="client_id=NocHScsf53aqE"
-	TSECRET="client_secret=f8d6b0450c2a2af273a26569cdb0de04"
-	####NCAPI###############################
-	ID="client_id=vE7BhzDJhqO"
-	SECRET="client_secret=0f40daa800fd87e20e0c6a8230c6e28593f1904c7edfaa18cbbca2f5bc9272b5"
-	########################################
-	TYPE="grant_type=client_credentials"
-	furl="http://$NC_API_IP/api/v1/Oauth/token"
-	iurl="http://$NC_API_IP/api/v1/ItemInfo/get"
-	turl="http://$NC_API_IP/api/v1/Station/get"
-	##get_token#############################
-
-	echo "get token from wareconn API"
-	Input_RestAPI_Message=$(curl -X GET "$NC_API_IP/api/v1/Oauth/token?${ID}&${SECRET}&${TYPE}")
-	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		token=$(echo "$Input_RestAPI_Message" | awk -F '"' '{print $10 }')
-		show_pass_message "get_token successful:$token"	
-	else
-		show_fail_message "$Input_RestAPI_Message"
-		show_fail_message "get token Fail Please check net cable or call TE"
-		exit 1
-	fi
+	getToken
 
 	##get_information from wareconn#########
 	echo "get data information from wareconn"
-	Input_RestAPI_Message=$(curl -X GET "$iurl" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":'"$1"'}') ####add parameters type 2024-05-07 
+	Input_RestAPI_Message=$(curl -X GET "$Item_Info_url" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":'"$1"'}') ####add parameters type 2024-05-07 
 	#echo $Input_RestAPI_Message
 	#pause
 	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
@@ -1725,7 +1683,7 @@ Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo()
 		part_number=$(echo "$Input_RestAPI_Message" | jq -r '.list.part_number')
 		service_status=$(echo "$Input_RestAPI_Message" | jq -r '.list.is_serving')
 		ErrorCodeMessage=$(echo "$Input_RestAPI_Message" | jq -r '.error_code')
-		show_pass_msg "$1 Get data information from wareconn!!!"
+		show_pass_message "$1 Get data information from wareconn!!!"
 	else	
 		show_fail_message "$Input_RestAPI_Message"
 		show_fail_message "$1 Get Data information from Wareconn Fail Please call TE"
@@ -1733,91 +1691,61 @@ Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo()
 	fi
 }
 
-#########################################################################################################
+
+#####################################################################
+#                                                                   #
+# Post Station Start                  								#
+#                                                                   #
+#####################################################################
 Output_Wareconn_Serial_Number_RestAPI_Mode_Start()
 {
 	Input_RestAPI_Message=""
 	station_name=""
 
-	###API
-
-	####TJAPI###############################
-	TID="client_id=NocHScsf53aqE"
-	TSECRET="client_secret=f8d6b0450c2a2af273a26569cdb0de04"
-	####NCAPI###############################
-	ID="client_id=vE7BhzDJhqO"
-	SECRET="client_secret=0f40daa800fd87e20e0c6a8230c6e28593f1904c7edfaa18cbbca2f5bc9272b5"
-	########################################
-	TYPE="grant_type=client_credentials"
-	furl="http://$NC_API_IP/api/v1/Oauth/token"
-	turl="http://$NC_API_IP/api/v1/Station/start"
 	##get_token#############################
-
-	echo "get token from wareconn API"
-	Input_RestAPI_Message=$(curl -X GET "$NC_API_IP/api/v1/Oauth/token?${ID}&${SECRET}&${TYPE}")
-	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		token=$(echo "$Input_RestAPI_Message" | awk -F '"' '{print $10 }')
-		show_pass_message "get_token successful:$token"	
-	else
-		show_fail_message "$Input_RestAPI_Message"
-		show_fail_message "get token Fail Please check net cable or call TE"
-		exit 1
-	fi
+	getToken
 
 	## result start to api/vi/Station/start
 	echo "upload start info to API "
 
-	Input_RestAPI_Message=$(curl -X GET "$turl" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":"'"$1"'","station_name":"'"$current_stc_name"'","start_time":"'"${stime}"'","operator_id":"'"$operator_id"'","test_machine_number":"'"$fixture_id"'","test_program_name":"'"$diag_name"'","test_program_version":"'"$CFG_VERSION"'","pn":"'"$Input_Upper_PN"'","model":"'"$PROJECT"'"}')
+	Input_RestAPI_Message=$(curl -X GET "$Start_Station_url" -H "content-type: application/json" -H "Authorization: Bearer "$token"" -d '{"serial_number":"'"$1"'","station_name":"'"$current_stc_name"'","start_time":"'"${stime}"'","operator_id":"'"$operator_id"'","test_machine_number":"'"$fixture_id"'","test_program_name":"'"$diag_name"'","test_program_version":"'"$CFG_VERSION"'","pn":"'"$Input_Upper_PN"'","model":"'"$PROJECT"'"}')
 	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		show_pass_msg "$1 upload start information"	
-
-	else	
+		show_pass_message "$1 upload start information"
+		fill_Dashboard_Info $fixture_id $current_stc_name
+	else
 		show_fail_message "$Input_RestAPI_Message"
 		show_fail_message "$1 upload start information Fail. Please call TE or wareconn team!!!"
 		exit 1
 	fi
 }
 
-##########################################################################################################
+
+#####################################################################
+#                                                                   #
+# Post Station end                  								#
+#                                                                   #
+#####################################################################
 Output_Wareconn_Serial_Number_RestAPI_Mode_End()
 {
 	Input_RestAPI_Message=""
 
-	###API
-
-	####TJAPI###############################
-	TID="client_id=NocHScsf53aqE"
-	TSECRET="client_secret=f8d6b0450c2a2af273a26569cdb0de04"
-	####NCAPI###############################
-	ID="client_id=vE7BhzDJhqO"
-	SECRET="client_secret=0f40daa800fd87e20e0c6a8230c6e28593f1904c7edfaa18cbbca2f5bc9272b5"
-	########################################
-	TYPE="grant_type=client_credentials"
-	furl="http://$NC_API_IP/api/v1/Oauth/token"
-	rurl="http://$NC_API_IP/api/v1/Station/end"
 	##get_token#############################
 	log_path="D:\\$PROJECT\\${Input_Upper_PN}\\${filename}"
-	echo "get token from wareconn API"
-	Input_RestAPI_Message=$(curl -X GET "$NC_API_IP/api/v1/Oauth/token?${ID}&${SECRET}&${TYPE}")
-	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		token=$(echo "$Input_RestAPI_Message" | awk -F '"' '{print $10 }')
-		show_pass_message "get_token successful:$token"	
-	else
-		show_fail_message "$Input_RestAPI_Message"
-		show_fail_message "Get token Fail Please check net cable or call TE"
-		exit 1
-	fi
+
+	getToken
 
 	##Report station result to api/vi/Station/end
-	echo "report station result to wareconn API "
-	Input_RestAPI_Message=$(curl -X GET "$rurl?serial_number=$1&log_path=$log_path" -H "content-type: application/json" -H "Authorization: Bearer "$token"")
+	echo "report station result to wareconn API"
+	curl_command="$End_Station_url?serial_number=$1&log_path=$log_path"
+	echo "Executing curl command: $curl_command"
+	Input_RestAPI_Message=$(curl -X GET "$curl_command" -H "content-type: application/json" -H "Authorization: Bearer "$token"")
 	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
-		show_pass_msg "$1 report result pass"	
-	else	
-		show_fail_message "$Input_RestAPI_Message"
+		show_pass_message "$1 report result pass"
+	else
+		# show_fail_message "$Input_RestAPI_Message"
 		show_fail_message "$1 report result FAIL Please call TE or wareconn Team"
-		#exit 1
 	fi
+	fill_Dashboard_Info $fixture_id
 }
 
 
@@ -1909,6 +1837,7 @@ checkContinue()
 	fi
 }
 
+
 alreadyDisplayed="false"
 displayCurrentStation()
 {
@@ -1957,11 +1886,81 @@ displayCurrentStation()
 }
 
 
-#############################################################################################################
+setRuntimeConfigurations()
+{
+	if [ "$CURRENT_FACTORY" == "NC" ]; then
+		Diagserver_IP=$NC_diagserver_IP
+		Logserver_IP=$NC_logserver_IP
+		API_IP=$NC_API_IP
+		API_ID=$NC_ID
+		API_SECRET=$NC_SECRET
+	elif [ "$CURRENT_FACTORY" == "TJ" ]; then
+		Diagserver_IP=$TJ_diagserver_IP
+		Logserver_IP=$TJ_logserver_IP
+		API_IP=$TJ_API_IP
+		API_ID=$TJ_ID
+		API_SECRET=$TJ_SECRET
+	else
+		show_fail_message "Unknown factory: $CURRENT_FACTORY"
+		show_fail_message "Accepted values are NC or TJ"
+		exit 1
+	fi
+	Token_url="http://$API_IP/api/v1/Oauth/token"
+	Test_Profile_url="http://$API_IP/api/v1/test-profile/get"
+	Station_url="http://$API_IP/api/v1/Station/get"
+	Start_Station_url="http://$API_IP/api/v1/Station/start"
+	End_Station_url="http://$API_IP/api/v1/Station/end"
+	Item_Info_url="http://$API_IP/api/v1/ItemInfo/get"
+}
+
+
+#####################################################################
+#                                                                   #
+# Get Wareconn Token                  								#
+#                                                                   #
+#####################################################################
+getToken()
+{
+	TYPE="grant_type=client_credentials"
+	echo "get token from wareconn API"
+	Input_RestAPI_Message=$(curl -X GET "$Token_url?${API_ID}&${API_SECRET}&${TYPE}")
+	if echo "$Input_RestAPI_Message" | jq -e '.code == 0' > /dev/null; then
+		token=$(echo "$Input_RestAPI_Message" | awk -F '"' '{print $10 }')
+		show_pass_message "get_token successful:$token"	
+	else
+		show_fail_message "$Input_RestAPI_Message"
+		show_fail_message "get token Fail Please check net cable or call TE"
+		exit 1
+	fi
+}
+
+
+#######################################################################
+# fill_Dashboard_Info
+# This function fills the dashboard information for the given fixture ID
+# and station name.
+# Arguments:
+#   $1: Fixture ID name
+#   $2: Current station name (optional)
+#######################################################################
+fill_Dashboard_Info()
+{
+	fixture_id_Name=$1
+	if [ $# -eq 1 ]; then
+		echo "" > "${DASHBOARD}/$fixture_id_Name.txt"
+	else
+		Current_Station=$2
+		echo "$Current_Station" >> "${DASHBOARD}/$fixture_id_Name.txt"
+	fi
+}
+
+
+###########################################################################################################
 ####Main Part####
-#############################################################################################################
+###########################################################################################################
 #export flow_name="${current_stc_name}"
 echo "Script Version is ${Script_VER}"
+setRuntimeConfigurations
 
 rm -rf $LOGFILE/*
 echo "" > /var/log/message
@@ -1969,7 +1968,7 @@ if [ ! -f $OPID ];then
 	Input_Server_Connection
 fi
 update
-ntpdate $NC_diagserver_IP
+ntpdate $Diagserver_IP
 hwclock -w
 StartTestTime=`date +"%Y%m%d%H%M%S"`
 if date +%Z | grep -q "EDT"; then
@@ -1982,32 +1981,31 @@ export start_time=$(date '+%F %T')
 Read_SN
 
 operator_id=$(echo $(cat ${SCANFILE} | grep "^operator_id=" | awk -F '=' '{print$2}'))
-if [[ "$operator_id" == DEBUG* ]]; then
+if [[ ! "$operator_id" = "DEBUG001" ]]; then
 	Check_Stn_and_PN warn
 fi
 
-if [ -f $SCANFILE ]; then
+
+#Verify the SN of the Units being Tested
+if [ ! -f $SCANFILE ]; then
+	if [ -f "uutself.cfg.env" ]; then
+		rsync -av uutself.cfg.env $mods/cfg/
+		Output_Scan_Infor
+	else
+		show_fail_message "uutself.cfg.env does not exist. Please Call TE!!!"
+		exit 1 
+	fi
+else
 	Scan_Upper_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number=" | awk -F '=' '{print$2}'))
-	Scan_Lower_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number2=" | awk -F '=' '{print$2}'))
-#	echo ${Scan_Upper_SN}
-#	echo ${Output_Upper_SN}
-#	echo ${Scan_Lower_SN}
-#	echo ${Output_Lower_SN}
-#	pause
 	if [ $testqty = 2 ];then
+		script_check2
+		Scan_Lower_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number2=" | awk -F '=' '{print$2}'))
+		Output_Scan_Infor
 		if [ "${Scan_Upper_SN}" == "${Output_Upper_SN}" ] && [ "${Scan_Lower_SN}" == "${Output_Lower_SN}" ]; then
-			show_pass_message "Local Scan Info Does Exist"
+			echo ""
 		else
-			script_check2
-			Output_Scan_Infor
-			Scan_Upper_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number=" | awk -F '=' '{print$2}'))
-			Scan_Lower_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number2=" | awk -F '=' '{print$2}'))
-			if [ "${Scan_Upper_SN}" == "${Output_Upper_SN}" ] && [ "${Scan_Lower_SN}" == "${Output_Lower_SN}" ]; then
-				echo ""
-			else
-				show_fail_message "Scan Wrong Please Check!!!!"
-				exit 1
-			fi
+			show_fail_message "Scan Wrong Please Check!!!!"
+			exit 1
 		fi
 	else
 		if [ "${Scan_Upper_SN}" == "${Output_Upper_SN}" ]; then
@@ -2024,55 +2022,33 @@ if [ -f $SCANFILE ]; then
 			fi
 		fi
 	fi
-else
-	if [ -f "uutself.cfg.env" ]; then
-		rsync -av uutself.cfg.env $mods/cfg/
-		Output_Scan_Infor
-		if [ $testqty = 2 ];then
-			Scan_Upper_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number=" | awk -F '=' '{print$2}'))
-			Scan_Lower_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number2=" | awk -F '=' '{print$2}'))
-			if [ "${Scan_Upper_SN}" == "${Output_Upper_SN}" ] && [ "${Scan_Lower_SN}" == "${Output_Lower_SN}" ]; then
-				echo ""
-			else
-				show_fail_message "Scan Wrong Please Check!!!!"
-				exit 1
-			fi
-		else
-			Scan_Upper_SN=$(echo $(cat ${SCANFILE} | grep "^serial_number=" | awk -F '=' '{print$2}'))
-			if [ "${Scan_Upper_SN}" == "${Output_Upper_SN}" ]; then
-				echo ""
-			else
-				show_fail_message "Scan Wrong Please Check!!!!"
-				exit 1
-			fi
-		fi	
-	else
-		show_fail_message "uutself.cfg.env does not exist. Please Call TE!!!"
-		exit 1 
-	fi	
-fi	
+fi
+
 
 #echo $testqty
 operator_id=$(echo $(cat ${SCANFILE} | grep "^operator_id=" | awk -F '=' '{print$2}'))
-if [[ "$operator_id" == DEBUG* ]]; then
+if [[ "$operator_id" = "DEBUG001" ]]; then
 	Run_Mode=1
 	PROJECT="DEBUG"
-fi	
+fi
+
 if [ $testqty = "2" ]; then
 	if [ $Run_Mode = "0" ];then
 		Check_Stn_and_PN fail
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
-		Input_Upper_Station=$station_name
-		Input_Upper_ESN=$Eboard_SN
-		Input_Upper_Eboard=$Eboard
-		Input_Upper_Status=$service_status
-		Input_Upper_HSC=$HS_QR_CODE
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Lower_SN}
-		Input_Lower_Station=$station_name
-		Input_Lower_ESN=$Eboard_SN
-		Input_Lower_Eboard=$Eboard
-		Input_Lower_Status=$service_status
-		Input_Lower_HSC=$HS_QR_CODE
+	fi
+	Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
+	Input_Upper_Station=$station_name
+	Input_Upper_ESN=$Eboard_SN
+	Input_Upper_Eboard=$Eboard
+	Input_Upper_Status=$service_status
+	Input_Upper_HSC=$HS_QR_CODE
+	Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Lower_SN}
+	Input_Lower_Station=$station_name
+	Input_Lower_ESN=$Eboard_SN
+	Input_Lower_Eboard=$Eboard
+	Input_Lower_Status=$service_status
+	Input_Lower_HSC=$HS_QR_CODE
+	if [ $Run_Mode = "0" ];then
 		if [[ "$list_st_all" =~ "$Input_Lower_Station" ]] && [[ "$list_st_all" =~ "$Input_Upper_Station" ]]; then
 			Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN} $station
 			Input_Upper_PN=$(grep "900PN" $mods/cfg/${Output_Upper_SN}.RSP | awk -F '=' '{ print $2 }'  )
@@ -2097,18 +2073,6 @@ if [ $testqty = "2" ]; then
 			show_fail_message "station wrong please check!!!"
 		fi
 	else
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
-		Input_Upper_Station=$station_name
-		Input_Upper_ESN=$Eboard_SN
-		Input_Upper_Eboard=$Eboard
-		Input_Upper_Status=$service_status
-		Input_Upper_HSC=$HS_QR_CODE
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Lower_SN}
-		Input_Lower_Station=$station_name
-		Input_Lower_ESN=$Eboard_SN
-		Input_Lower_Eboard=$Eboard
-		Input_Lower_Status=$service_status
-		Input_Lower_HSC=$HS_QR_CODE
 		read -p "Please Input station :" station
 		if [[ "$list_st_all" =~ "$station" ]];then
 			Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN} $station
@@ -2131,12 +2095,14 @@ if [ $testqty = "2" ]; then
 else
 	if [ $Run_Mode = "0" ];then
 		Check_Stn_and_PN fail
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
-		Input_Upper_Station=$station_name
-		Input_Upper_ESN=$Eboard_SN
-		Input_Upper_Eboard=$Eboard
-		Input_Upper_Status=$service_status
-		Input_Upper_HSC=$HS_QR_CODE
+	fi
+	Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
+	Input_Upper_Station=$station_name
+	Input_Upper_ESN=$Eboard_SN
+	Input_Upper_Eboard=$Eboard
+	Input_Upper_Status=$service_status
+	Input_Upper_HSC=$HS_QR_CODE
+	if [ $Run_Mode = "0" ];then
 		if [[ "$list_st_all" =~ "$Input_Upper_Station" ]]; then		
 			Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN}
 			analysis_sta
@@ -2145,12 +2111,6 @@ else
 			exit 1 
 		fi
 	else
-		Input_Wareconn_Serial_Number_RestAPI_Mode_ItemInfo ${Output_Upper_SN}
-		Input_Upper_Station=$station_name
-		Input_Upper_ESN=$Eboard_SN
-		Input_Upper_Eboard=$Eboard
-		Input_Upper_Status=$service_status
-		Input_Upper_HSC=$HS_QR_CODE
 		read -p "Please Input station :" station
 		if [[ "$list_st_all" =~ "$station" ]];then
 			Input_Wareconn_Serial_Number_RestAPI_Mode ${Output_Upper_SN} $station
