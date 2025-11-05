@@ -8,7 +8,7 @@
 ##
 ## Version History
 ##-------------------------------
-## Version       : 1.0.8
+## Version       : 1.0.9
 ## Release date  : 2024-03-08
 ## Revised by    : Winter Liu
 ## Description   : Initial release
@@ -21,6 +21,7 @@
 ## add new log for nvidia 2024-08-26
 ## add blocking test pass but wareconn doesn't auto-pass feature
 ## add upload result to LF API 2024-11-08
+## add capture "ctrl+c" abnormal signal to terminate the test and delete local diag to prevent misjudgment 2024-12-14
 ##**********************************************************************************
 
 [ -d "/mnt/nv/logs/" ] || mkdir /mnt/nv/logs
@@ -53,8 +54,8 @@ declare -u station
 declare -u fixture_id
 
 
-Script_VER="1.0.8"  ###script version 2024-11-08
-CFG_VERSION="1.0.8"
+Script_VER="1.0.9"  ###script version 2024-11-08
+CFG_VERSION="1.0.9"
 PROJECT="TESLA"
 Process_Result=""
 Input_Upper_SN=""
@@ -94,6 +95,8 @@ Input_Upper_Eboard=""
 Input_Upper_Status=""
 Input_Upper_HSC=""
 Tstation=""
+Output_Upper_699PN=""
+Output_Lower_699PN=""
 cont="true"
 
 
@@ -283,6 +286,27 @@ show_fail()
 	echo
 	
 }
+#################capture "ctrl+c"############################################
+function trap_ctrlc()
+{
+	# perform cleanup here 2024-12-14
+
+	echo -e ""
+	echo -e ""
+	echo -e "\033[47;30m\033[05m	LINE No: ${LINENO}	Ctrl-C caught ...	\033[0m"
+	echo -e ""
+	echo -e ""
+if [ -n "${diag_VER}" ];then
+	if [ $mods/$diag_VER ];then
+		rm -rf $mods/$diag_VER
+		echo "delete local diag $diag_VER complete"
+	fi
+fi	
+
+	exit 1
+}
+trap "trap_ctrlc" 2
+
 ####get information from wareconn####################################
 Input_Wareconn_Serial_Number_RestAPI_Mode()
 {
@@ -357,6 +381,7 @@ else
 	show_fail_message "$Input_RestAPI_Message"
 	show_fail_message "$1 Get test information from Wareconn Fail Please call TE"
 	exit 1
+
 fi
 	
 }
@@ -514,13 +539,15 @@ if [ ! -f "nvflash_mfg" ];then
 	[ ! -f "uutself.cfg.env" ] && cp $Diag_Path/uutself.cfg.env ./
 fi
 
-counts=$(lspci | grep NV | wc -l)
+counts=$(./nvflash_mfg -A -a | grep "10DE" | wc -l)
 
 if [ $counts = "2" ]; then
 	port1=$(lspci | grep NV | head -n 1 | awk '{ print $1 }')
 	port2=$(lspci | grep NV | tail -n 1 | awk '{ print $1 }')
 	Output_Upper_SN=$(./nvflash_mfg -B $port1  --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+	Output_Upper_699PN=$(./nvflash_mfg -B $port1  --rdobd | grep -m 1 'Board699PartNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 	Output_Lower_SN=$(./nvflash_mfg -B $port2  --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+	Output_Lower_699PN=$(./nvflash_mfg -B $port2  --rdobd | grep -m 1 'Board699PartNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 	if [ -z ${Output_Upper_SN} ] && [ -z ${Output_Lower_SN} ]; then
 		show_fail_msg "Read SN error Please check!!!"
 		exit 1
@@ -532,6 +559,7 @@ if [ $counts = "2" ]; then
 	fi
 elif [ $counts = "1" ]; then
 	Output_Upper_SN=$(./nvflash_mfg --rdobd | grep -m 1 'BoardSerialNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
+	Output_Upper_699PN=$(./nvflash_mfg --rdobd | grep -m 1 'Board699PartNumber' | awk -F ':' '{gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}')
 	if [ -z ${Output_Upper_SN} ]; then
 		show_fail_msg "Read SN error Please check!!!"
 		exit 1
@@ -760,64 +788,89 @@ if [ $Run_Mode = "0" ];then ###2024-06-15
 			# fi	
 		# fi
 	if [ ${current_stc_name} = "FLA" ];then
-		test_item="rwcsv FLA bioscheck"
+		test_item="rwcsv FLA"
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
-			Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-			show_pass
-			show_pass_message "FLA station need poweroff and turn off/on 54v PSU as well"	
+			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
+			if [ -n "$resf" ];then
+				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+				show_pass
+				show_pass_message "FLA station need poweroff and turn off/on 54v PSU as well"
+			else
+				show_fail_message "can't find pass log please check" 
+			fi	
 		else
-			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 			show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg} 		
 		fi
 	elif [ ${current_stc_name} = "FLA2" ];then
 		test_item="rwcsv FLA2"
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
-			Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-			show_pass
-			show_pass_message "FLA2 station need poweroff and turn off/on 54v PSU as well"	
+			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
+			if [ -n "$resf" ];then
+				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+				show_pass
+				show_pass_message "FLA2 station need poweroff and turn off/on 54v PSU as well"
+			else
+				show_fail_message "can't find pass log please check" 
+			fi					
 		else
-			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 			show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}			
 		fi	
 	elif [ ${current_stc_name} = "FLB" ];then
 		test_item="rwcsv FLB"
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
-			Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-			show_pass
-			if [ "$MACHINE" = "G520" ];then
-				sleep 10
-				reboot
-			else	
-				show_pass_message "FLB station need poweroff and turn off/on 54v PSU as well"
-			fi		
+			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLB*" 2>/dev/null)
+			if [ -n "$resf" ];then		
+				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+				show_pass
+				if [ "$MACHINE" = "G520" ];then
+					sleep 10
+					reboot
+				else	
+					show_pass_message "FLB station need poweroff and turn off/on 54v PSU as well"
+				fi
+			else
+				show_fail_message "can't find pass log please check" 
+			fi					
 		else
-			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 			show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}	
 		fi
 	elif [ ${current_stc_name} = "FLC" ];then
 		test_item="rwcsv FLC"
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
-			Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-			show_pass
-			show_pass_message "FLC station need poweroff and turn off/on 54v PSU as well"	
+			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLC*" 2>/dev/null)
+			if [ -n "$resf" ];then		
+				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+				show_pass
+				show_pass_message "FLC station need poweroff and turn off/on 54v PSU as well"
+			else
+				show_fail_message "can't find pass log please check" 
+			fi				
 		else
-			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 			show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}	
 		fi
 	elif [ ${current_stc_name} = "CHIFLASH" ];then
 		test_item="rwcsv CHIFLASH"
 		run_command "$test_item"
 		if [ $? -eq 0 ];then
-			Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-			show_pass
-			sleep 10
-			reboot	
+			resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_FLA*" 2>/dev/null)
+			if [ -n "$resf" ];then		
+				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+				show_pass
+				sleep 10
+				reboot
+			else
+				show_fail_message "can't find pass log please check" 
+			fi				
 		else
-			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+			Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 			show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}	
 		fi		
 	elif [ ${current_stc_name} = ${Tstation} ];then ####for clear BBX station### 2024-04-26
@@ -828,8 +881,8 @@ if [ $Run_Mode = "0" ];then ###2024-06-15
 				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
 				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
 				if [ -n "$resf" ] && [ -n "$resc" ];then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
@@ -837,48 +890,55 @@ if [ $Run_Mode = "0" ];then ###2024-06-15
 					fi
 						
 				elif [ -n "$resf" ] ; then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					show_pass
+					if [ "$cont" = "true" ];then
+						sleep 10
+						reboot
+					fi
+				elif [ -n "$resc" ];then
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
 						reboot
 					fi
 				else
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					show_fail_message "can't find pass log please check" 
+				fi	
+			else
+				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
+				if [ -n "$resf" ];then
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
 						reboot
 					fi
+				else
+					show_fail_message "can't find pass log please check"
 				fi	
-			else
-				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-				show_pass
-				if [ "$cont" = "true" ];then
-					sleep 10
-					reboot
-				fi
 			fi	
 		else
 			if [ $testqty = "2" ];then
 				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${current_stc_name}*" 2>/dev/null)
 				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${current_stc_name}*" 2>/dev/null)
 				if [ -n "$resf" ];then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_fail ${Scan_Lower_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				elif [ -n "$resc" ];then	
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
-					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
+					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				else
-					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
-					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_fail ${Scan_Lower_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				fi		
 			else
-				Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+				Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 				show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 			fi	
 		fi
@@ -890,56 +950,63 @@ if [ $Run_Mode = "0" ];then ###2024-06-15
 				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${Tstation}*" 2>/dev/null)
 				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${Tstation}*" 2>/dev/null)
 				if [ -n "$resf" ] && [ -n "$resc" ];then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
 						reboot
 					fi
 				elif [ -n "$resf" ] ; then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					show_pass
+					if [ "$cont" = "true" ];then
+						sleep 10
+						reboot
+					fi
+				elif [ -n "$resc" ];then
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
 						reboot
 					fi
 				else
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					show_fail_message "can't find pass log please check"
+				fi	
+			else
+				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${Tstation}*" 2>/dev/null)
+				if [ -n "$resf" ];then
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_pass
 					if [ "$cont" = "true" ];then
 						sleep 10
 						reboot
 					fi
+				else
+					show_fail_message "can't find pass log please check"
 				fi	
-			else
-				Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-				show_pass
-				if [ "$cont" = "true" ];then
-					sleep 10
-					reboot
-				fi
 			fi	
 		else
 			if [ $testqty = "2" ];then
 				resf=$(find $LOGFILE/ -name "*${Scan_Upper_SN}_P_${Tstation}*" 2>/dev/null)
 				resc=$(find $LOGFILE/ -name "*${Scan_Lower_SN}_P_${Tstation}*" 2>/dev/null)
 				if [ -n "$resf" ];then
-					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
-					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Upper_SN} PASS ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
+					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_fail ${Scan_Lower_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				elif [ -n "$resc" ];then	
-					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
-					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Lower_SN} PASS ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
+					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				else
-					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+					Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 					show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
-					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC}
+					Upload_Log ${Scan_Lower_SN} FAIL ${Input_Lower_Eboard} ${Input_Lower_ESN} ${Input_Lower_HSC} ${Output_Lower_699PN}
 					show_fail ${Scan_Lower_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 				fi		
 			else
-				Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC}
+				Upload_Log ${Scan_Upper_SN} FAIL ${Input_Upper_Eboard} ${Input_Upper_ESN} ${Input_Upper_HSC} ${Output_Upper_699PN}
 				show_fail ${Scan_Upper_SN} ${FactoryErrorCode} ${FactoryErrorMsg}
 			fi	
 		fi	
@@ -1184,6 +1251,7 @@ echo "==========================================================================
 echo "Start time              :$start_time" >>"${filename}"
 echo "End time                :$(date '+%F %T')" >>"${filename}"
 echo "Part number             :${Input_Upper_PN}" >>"${filename}"
+echo "699Part number          :${6}" >>"${filename}"
 echo "Serial number           :${1}" >>"${filename}"
 echo "operator_id             :`grep "operator_id=" $SCANFILE |sed 's/.*= *//'`" >>"${filename}"
 echo "fixture_id              :`grep "fixture_id=" $SCANFILE |sed 's/.*= *//'`" >>"${filename}"
