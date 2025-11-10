@@ -1,6 +1,6 @@
 # SortLog_Analyse
 
-This tool reads serial numbers from a CSV file to download attachments, generate a SUFA–Serial Number mapping, and extract key metrics from ZIP files containing the keyword "Sorting" into a structured summary CSV.
+This tool reads serial numbers from a CSV file to download attachments from ETQ, generate a SUFA–Serial Number mapping, and extract key metrics from ZIP files containing the keyword "Sorting" into a structured summary CSV.
 
 ## Version
 
